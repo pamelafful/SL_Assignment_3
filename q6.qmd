@@ -81,3 +81,50 @@ w0_new=round(w0-(alpha*w0.der),3);w0_new
 w1_new=round(w1-(alpha*w1.der),3);w1_new
 
 ```
+
+```{r}
+#Q17
+
+library(caret)
+library(neuralnet)
+pima=read_csv("pimaDiabetes.csv")
+str(pima)
+```
+
+```{r}
+
+set.seed(1)
+y=factor(pima$testDiabetes, levels=c(0,1))
+pima$testDiabetes=factor(pima$testDiabetes, levels=c(0,1))
+inds=createDataPartition(
+  y,
+  times = 1,
+  p = 0.8,
+  list = TRUE,
+  groups = min(5, length(y))
+)
+
+nrow(pima)*0.8;length(inds[['Resample1']])
+#nrow(pima)*0.2;length(inds[['Resample2']])
+
+
+training=pima[inds[['Resample1']],]
+test=pima[-inds[['Resample1']],]
+
+
+scale_training=data.frame(scale(data.matrix(training[,-ncol(training)]), center = TRUE, scale = TRUE))
+scale_training$testDiabetes =training$testDiabetes
+scale_test=data.frame(scale(data.matrix(test[,-ncol(test)]), center = TRUE, scale = TRUE))
+scale_test$testDiabetes =test$testDiabetes
+
+```
+
+```{r}
+pima_nn <- neuralnet(
+ testDiabetes ~ .,
+  data = scale_training,
+  hidden = c(3),
+  act.fct = "logistic",
+  linear.output = TRUE
+)
+```
