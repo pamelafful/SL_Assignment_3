@@ -128,3 +128,13 @@ pima_nn <- neuralnet(
   linear.output = TRUE
 )
 ```
+
+```{r}
+plot(pima_nn)
+wei_ghts=pima_nn$weights[[1]]
+total_w=length(wei_ghts[[1]])+length(wei_ghts[[2]]);total_w
+```
+
+```{r}
+p
+```
