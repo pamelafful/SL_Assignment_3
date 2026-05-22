@@ -84,7 +84,7 @@ w1_new=round(w1-(alpha*w1.der),3);w1_new
 
 ```{r}
 #Q17
-
+library(readr)
 library(caret)
 library(neuralnet)
 pima=read_csv("pimaDiabetes.csv")
@@ -120,12 +120,13 @@ scale_test$testDiabetes =test$testDiabetes
 ```
 
 ```{r}
+set.seed(1)
 pima_nn <- neuralnet(
  testDiabetes ~ .,
   data = scale_training,
   hidden = c(3),
   act.fct = "logistic",
-  linear.output = TRUE
+  linear.output = FALSE # this is classification
 )
 ```
 
@@ -136,5 +137,590 @@ total_w=length(wei_ghts[[1]])+length(wei_ghts[[2]]);total_w
 ```
 
 ```{r}
-p
+
+```
+
+```{r}
+library(dplyr)
+train_pred <- predict(pima_nn, scale_training)
+train_pred_df=data.frame(train_pred)
+train_pred_df=train_pred_df %>% rename(prob_no=X1,prob_yes=X2) %>% 
+  mutate(yhat=if_else(prob_yes>=0.5,1,0))
+train_pred_df$ytrue=scale_training$testDiabetes
+
+round( (sum(train_pred_df$yhat==train_pred_df$ytrue)/length(train_pred_df$ytrue))*100,3) # train correct class rate
+
+
+lab=ifelse(train_pred>0.5,1,0)
+
+```
+
+```{r}
+test_pred <- predict(pima_nn, scale_test)
+test_pred_df=data.frame(test_pred)
+test_pred_df=test_pred_df %>% rename(prob_no=X1,prob_yes=X2) %>% 
+  mutate(yhat=if_else(prob_yes>=0.5,1,0))
+test_pred_df$ytrue=scale_test$testDiabetes
+
+round( (sum(test_pred_df$yhat==test_pred_df$ytrue)/length(test_pred_df$ytrue))*100,3) # test correct class rate
+```
+
+```{r}
+pima_nn$weights[[1]]
+```
+
+```{r}
+layer_1_w=wei_ghts[[1]]
+round(layer_1_w[2,2],3) # second weight coming from layer 1, intersecting of going into the second node, using indexing starting from 1
+
+layer_2_weights=wei_ghts[[2]]
+round(layer_2_weights[4,2],3)
+```
+
+```{r}
+library(caret)
+library(neuralnet)
+
+set.seed(1)
+
+# Create folds once
+folds <- createFolds(training$testDiabetes, k = 10)
+
+# Scaling helper
+scale_helper <- function(train, test){
+
+  # Predictor columns only
+  x_train <- subset(train, select = -testDiabetes)
+  x_test  <- subset(test,  select = -testDiabetes)
+
+  # Means and SDs from training fold
+  train_center <- vapply(x_train, mean, numeric(1))
+  train_scale  <- vapply(x_train, sd, numeric(1))
+
+  # Scale training data
+  train_st <- as.data.frame(
+    scale(x_train,
+          center = train_center,
+          scale = train_scale)
+  )
+
+  # Scale test data using training statistics
+  test_st <- as.data.frame(
+    scale(x_test,
+          center = train_center,
+          scale = train_scale)
+  )
+
+  # Add response back
+  train_st$testDiabetes <- train$testDiabetes
+  test_st$testDiabetes  <- test$testDiabetes
+
+  return(list(
+    train = train_st,
+    test  = test_st
+  ))
+}
+
+# Function to perform CV for ONE architecture
+nn_cv <- function(hidden_nodes, data, folds){
+
+  cv_error <- vapply(folds, function(fold){
+
+    set.seed(1)
+
+    scaled <- scale_helper(
+      data[-fold, ],
+      data[fold, ]
+    )
+
+    fit <- neuralnet(
+      testDiabetes ~ .,
+      data = scaled$train,
+      hidden = hidden_nodes,
+      act.fct = "logistic",
+      linear.output = TRUE
+    )
+
+    pred <- as.numeric(
+      predict(fit,
+              subset(scaled$test,
+                     select = -testDiabetes))
+    )
+
+    mean((scaled$test$testDiabetes - pred)^2)
+
+  }, numeric(1))
+
+  mean(cv_error)
+}
+
+# Different neural network architectures
+node_list <- list(
+  c(2),
+  c(4),
+  c(6),
+  c(2,2),
+  c(4,2),
+  c(5,3)
+)
+
+# Run CV for all models
+results <- data.frame(
+  architecture = sapply(node_list, paste, collapse = "-"),
+  cv_mse = sapply(node_list,
+                  nn_cv,
+                  data = training,
+                  folds = folds)
+)
+
+results
+```
+
+```{r}
+library(caret)
+library(neuralnet)
+
+set.seed(1)
+
+# Create folds
+folds <- createFolds(training$testDiabetes, k = 10)
+
+# Scaling helper
+scale_helper <- function(train, test){
+
+  # Predictor columns only
+  x_train <- subset(train, select = -testDiabetes)
+  x_test  <- subset(test,  select = -testDiabetes)
+
+  # Mean and SD from training fold
+  train_center <- vapply(x_train, mean, numeric(1))
+  train_scale  <- vapply(x_train, sd, numeric(1))
+
+  # Scale training predictors
+  train_st <- as.data.frame(
+    scale(
+      x_train,
+      center = train_center,
+      scale = train_scale
+    )
+  )
+
+  # Scale test predictors using training statistics
+  test_st <- as.data.frame(
+    scale(
+      x_test,
+      center = train_center,
+      scale = train_scale
+    )
+  )
+
+  # Add response variable back
+  train_st$testDiabetes <- train$testDiabetes
+  test_st$testDiabetes  <- test$testDiabetes
+
+  return(list(
+    train = train_st,
+    test  = test_st
+  ))
+}
+
+# Cross-validation function
+nn_cv_accuracy <- function(hidden_nodes, data, folds){
+
+  cv_accuracy <- vapply(folds, function(fold){
+
+    set.seed(1)
+
+    # Split and scale
+    scaled <- scale_helper(
+      data[-fold, ],
+      data[fold, ]
+    )
+
+    # Fit neural network
+    fit <- neuralnet(
+      testDiabetes ~ .,
+      data = scaled$train,
+      hidden = hidden_nodes,
+      act.fct = "logistic",
+      linear.output = FALSE
+    )
+
+    # Predict probabilities
+    pred_prob <- data.frame(
+      predict(
+        fit,
+        subset(scaled$test,
+               select = -testDiabetes)
+      )
+    ) %>% rename(prob_no=X1,prob_yes=X2) 
+
+    # Convert probabilities to class labels
+    pred_prob$pred_class <- ifelse(pred_prob$prob_no >= 0.5, 1, 0)
+    
+    
+    # Accuracy
+    sum(pred_prob$pred_class == scaled$test$testDiabetes)/length(scaled$test$testDiabetes)
+
+  }, numeric(1))
+
+  mean(cv_accuracy)
+}
+
+# Different neural network architectures
+node_list <- list(
+  c(1)
+ 
+
+
+)
+
+# Run CV for all architectures
+results <- data.frame(
+  architecture = sapply(node_list, paste, collapse = "-"),
+  cv_accuracy = sapply(
+    node_list,
+    nn_cv_accuracy,
+    data = training,
+    folds = folds
+  )
+)
+
+results
+```
+
+```{r}
+set.seed(1)
+
+# Create folds
+folds <- createFolds(training$testDiabetes, k = 10)
+
+# Scaling helper
+scale_helper <- function(train, test){
+
+  # Predictor columns only
+  x_train <- subset(train, select = -testDiabetes)
+  x_test  <- subset(test,  select = -testDiabetes)
+
+  # Mean and SD from training fold
+  train_center <- vapply(x_train, mean, numeric(1))
+  train_scale  <- vapply(x_train, sd, numeric(1))
+
+  # Scale training predictors
+  train_st <- as.data.frame(
+    scale(
+      x_train,
+      center = train_center,
+      scale = train_scale
+    )
+  )
+
+  # Scale test predictors using training statistics
+  test_st <- as.data.frame(
+    scale(
+      x_test,
+      center = train_center,
+      scale = train_scale
+    )
+  )
+
+  # Add response variable back
+  train_st$testDiabetes <- train$testDiabetes
+  test_st$testDiabetes  <- test$testDiabetes
+
+  return(list(
+    train = train_st,
+    test  = test_st
+  ))
+}
+
+# Cross-validation function
+nn_cv_accuracy <- function(hidden_nodes, data, folds){
+
+  cv_accuracy <- vapply(folds, function(fold){
+
+    set.seed(1)
+
+    # Split and scale
+    scaled <- scale_helper(
+      data[-fold, ],
+      data[fold, ]
+    )
+
+    # Fit neural network
+    fit <- neuralnet(
+      testDiabetes ~ .,
+      data = scaled$train,
+      hidden = hidden_nodes,
+      act.fct = "logistic",
+      linear.output = FALSE
+    )
+
+    # Predict probabilities
+    # Predict probabilities
+    pred_prob <- data.frame(
+      predict(
+        fit,
+        subset(scaled$test,
+               select = -testDiabetes)
+      )
+    ) %>% rename(prob_no=X1,prob_yes=X2) 
+
+    # Convert probabilities to class labels
+    pred_prob$pred_class <- ifelse(pred_prob$prob_no >= 0.5, 1, 0)
+    
+    
+    # Accuracy
+    sum(pred_prob$pred_class == scaled$test$testDiabetes)/length(scaled$test$testDiabetes)
+
+  }, numeric(1))
+  mean(cv_accuracy)
+}
+
+# Different neural network architectures
+node_list <- list(
+  c(2)
+ 
+
+
+)
+
+# Run CV for all architectures
+results <- data.frame(
+  architecture = sapply(node_list, paste, collapse = "-"),
+  cv_accuracy = sapply(
+    node_list,
+    nn_cv_accuracy,
+    data = training,
+    folds = folds
+  )
+)
+
+results
+```
+
+```{r}
+set.seed(1)
+
+# Create folds
+folds <- createFolds(training$testDiabetes, k = 10)
+
+# Scaling helper
+scale_helper <- function(train, test){
+
+  # Predictor columns only
+  x_train <- subset(train, select = -testDiabetes)
+  x_test  <- subset(test,  select = -testDiabetes)
+
+  # Mean and SD from training fold
+  train_center <- vapply(x_train, mean, numeric(1))
+  train_scale  <- vapply(x_train, sd, numeric(1))
+
+  # Scale training predictors
+  train_st <- as.data.frame(
+    scale(
+      x_train,
+      center = train_center,
+      scale = train_scale
+    )
+  )
+
+  # Scale test predictors using training statistics
+  test_st <- as.data.frame(
+    scale(
+      x_test,
+      center = train_center,
+      scale = train_scale
+    )
+  )
+
+  # Add response variable back
+  train_st$testDiabetes <- train$testDiabetes
+  test_st$testDiabetes  <- test$testDiabetes
+
+  return(list(
+    train = train_st,
+    test  = test_st
+  ))
+}
+
+# Cross-validation function
+nn_cv_accuracy <- function(hidden_nodes, data, folds){
+
+  cv_accuracy <- vapply(folds, function(fold){
+
+    set.seed(1)
+
+    # Split and scale
+    scaled <- scale_helper(
+      data[-fold, ],
+      data[fold, ]
+    )
+
+    # Fit neural network
+    fit <- neuralnet(
+      testDiabetes ~ .,
+      data = scaled$train,
+      hidden = hidden_nodes,
+      act.fct = "logistic",
+      linear.output = FALSE,
+      stepmax=1e6*2
+    )
+
+    # Predict probabilities
+    # Predict probabilities
+    pred_prob <- data.frame(
+      predict(
+        fit,
+        subset(scaled$test,
+               select = -testDiabetes)
+      )
+    ) %>% rename(prob_no=X1,prob_yes=X2) 
+
+    # Convert probabilities to class labels
+    pred_prob$pred_class <- ifelse(pred_prob$prob_no >= 0.5, 1, 0)
+    
+    
+    # Accuracy
+    sum(pred_prob$pred_class == scaled$test$testDiabetes)/length(scaled$test$testDiabetes)
+
+  }, numeric(1))
+
+
+  mean(cv_accuracy)
+}
+
+# Different neural network architectures
+node_list <- list(
+  c(6)
+ 
+
+
+)
+
+# Run CV for all architectures
+results <- data.frame(
+  architecture = sapply(node_list, paste, collapse = "-"),
+  cv_accuracy = sapply(
+    node_list,
+    nn_cv_accuracy,
+    data = training,
+    folds = folds
+  )
+)
+
+results
+```
+
+```{r}
+set.seed(1)
+
+# Create folds
+folds <- createFolds(training$testDiabetes, k = 10)
+
+# Scaling helper
+scale_helper <- function(train, test){
+
+  # Predictor columns only
+  x_train <- subset(train, select = -testDiabetes)
+  x_test  <- subset(test,  select = -testDiabetes)
+
+  # Mean and SD from training fold
+  train_center <- vapply(x_train, mean, numeric(1))
+  train_scale  <- vapply(x_train, sd, numeric(1))
+
+  # Scale training predictors
+  train_st <- as.data.frame(
+    scale(
+      x_train,
+      center = train_center,
+      scale = train_scale
+    )
+  )
+
+  # Scale test predictors using training statistics
+  test_st <- as.data.frame(
+    scale(
+      x_test,
+      center = train_center,
+      scale = train_scale
+    )
+  )
+
+  # Add response variable back
+  train_st$testDiabetes <- train$testDiabetes
+  test_st$testDiabetes  <- test$testDiabetes
+
+  return(list(
+    train = train_st,
+    test  = test_st
+  ))
+}
+
+# Cross-validation function
+nn_cv_accuracy <- function(hidden_nodes, data, folds){
+
+  cv_accuracy <- vapply(folds, function(fold){
+
+    set.seed(1)
+
+    # Split and scale
+    scaled <- scale_helper(
+      data[-fold, ],
+      data[fold, ]
+    )
+
+    # Fit neural network
+    fit <- neuralnet(
+      testDiabetes ~ .,
+      data = scaled$train,
+      hidden = hidden_nodes,
+      act.fct = "logistic",
+      linear.output = FALSE,
+      stepmax=1e6*2
+    )
+
+    # Predict probabilities
+    # Predict probabilities
+    pred_prob <- data.frame(
+      predict(
+        fit,
+        subset(scaled$test,
+               select = -testDiabetes)
+      )
+    ) %>% rename(prob_no=X1,prob_yes=X2) 
+
+    # Convert probabilities to class labels
+    pred_prob$pred_class <- ifelse(pred_prob$prob_no >= 0.5, 1, 0)
+    
+    
+    # Accuracy
+    sum(pred_prob$pred_class == scaled$test$testDiabetes)/length(scaled$test$testDiabetes)
+
+  },numeric(1))#numeric(1)
+
+
+  mean(cv_accuracy)
+}
+
+# Different neural network architectures
+node_list <- list(
+  c(10)
+ 
+
+
+)
+
+# Run CV for all architectures
+results <- data.frame(
+  architecture = sapply(node_list, paste, collapse = "-"),
+  cv_accuracy = sapply(
+    node_list,
+    nn_cv_accuracy,
+    data = training,
+    folds = folds
+  )
+)
+
+results
 ```
