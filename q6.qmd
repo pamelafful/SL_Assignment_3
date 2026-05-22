@@ -1,0 +1,83 @@
+---
+title: "Quiz 6"
+author: "Moi"
+format: html
+editor: visual
+---
+
+```{r}
+
+x1_mean=3.61352	
+x2_mean=	11.3600	
+x3_mean=0.5547
+x1_sd=8.601545
+x2_sd=23.32245
+x3_sd=0.1158777
+y_mean=	22.5300
+y_sd=9.197104
+
+scaled=function(x,mean_,sd_){
+  x_scaled=(round(x,3)- round(mean_,3))/round(sd_,3)
+  return( round(x_scaled,3))
+  
+}
+
+x1_scaled=scaled(0.00632,x1_mean,x1_sd);x1_scaled
+
+x2_scaled=scaled(18,x2_mean,x2_sd);x2_scaled
+
+x3_scaled=scaled(0.538,x3_mean,x3_sd);x3_scaled
+
+y_scaled=scaled(24,y_mean,y_sd);y_scaled
+```
+
+You can add options to executable code like this
+
+```{r}
+z=function(x,w){
+ prod= x%*%w
+ return(prod)
+  
+}
+z(1:3,1:3)
+
+x=c(1,-0.417,-0.487,-0.740)
+w=c(0.5,1.2,-2.5,0.8)
+z_val=round(z(x,w),3)
+
+relu <- function(x) pmax(0, x)
+relu(z_val)
+
+heaviside <- function(x) {
+  as.numeric(x >= 0)
+}
+
+heaviside(z_val)
+
+sigmoid <- function(x) {
+  1 / (1 + exp(-x))
+}
+
+round(sigmoid(z_val),3)
+```
+
+```{r}
+yhat=0.62
+x1_st=	-0.417
+x2_st=	-0.487
+x3_st=	-0.740
+y_st=	-0.101
+alpha=0.1
+w0=0.5
+w1=1.2
+
+w0.der=round(-(y_st-yhat),3);w0.der
+
+w1.der=round(-(y_st-yhat)*x1_st,3);w1.der
+
+w0_new=round(w0-(alpha*w0.der),3);w0_new
+
+
+w1_new=round(w1-(alpha*w1.der),3);w1_new
+
+```
