@@ -194,22 +194,22 @@ library(foreach)
 
 # Use grid search to fid the optimal Cost Parameter C
 
-# n_cores <- parallel::detectCores() - 1  # leave one core free
-# cl <- makeCluster(n_cores)
-# clusterEvalQ(cl, library(e1071))
-# registerDoParallel(cl)
-# 
-# tune.control()
-# svm_model <- tune.svm( fully_booked_30~., data=
-# listings_data_cleaned_features,kernel='linear',
-# cost=seq(0.25, 3, by = 0.15),type='C-classification',
-# tunecontrol = tune.control(cross = 10) # k=10 cross validation
-# )
-# stopCluster(cl)
-# registerDoSEQ()
+n_cores <- parallel::detectCores() - 1  # leave one core free
+cl <- makeCluster(n_cores)
+clusterEvalQ(cl, library(e1071))
+registerDoParallel(cl)
+
+tune.control()
+svm_model <- tune.svm( fully_booked_30~., data=
+listings_data_cleaned_features,kernel='linear',
+cost=seq(0.15, 3, by = 0.15),type='C-classification',
+tunecontrol = tune.control(cross = 10) # k=10 cross validation
+)
+stopCluster(cl)
+registerDoSEQ()
 # save model 
 
-#saveRDS(svm_model, "svm_model.rds")
+saveRDS(svm_model, "svm_model.rds")
 liner_svm_model=readRDS("svm_model.rds")
 liner_svm_model$best.model
 
@@ -247,4 +247,8 @@ nl_svm_model$best.model
 
 
 
+```
+
+```{r}
+feed
 ```
