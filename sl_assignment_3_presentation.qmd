@@ -1,0 +1,250 @@
+---
+title: "AirBnB Listings Modelling"
+author: "Pamela Afful"
+format: revealjs
+editor: visual
+---
+
+## Exploratory Analysis
+
+```{r lib_read, eval=T, echo=F}
+#| message: false
+#| warning: false
+library(dplyr)
+library(knitr)
+library(plotly)
+library(ggplot2)
+library(ggpubr)
+library(lubridate)
+library(zoo)
+library(tidyverse)
+library(GGally)
+library(modelsummary)
+library(stargazer)
+library(gtsummary)
+library(patchwork)
+library(glmnet)
+library(lmridge)
+library(tidyr)
+library(caret)
+library(dplyr)
+library(interactions)
+library(kableExtra)
+library(patchwork) 
+library(knitr)
+library(broom)
+library(car)
+library(maps)
+library(RColorBrewer)
+library(tree)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(ranger)
+library(randomForest)
+library(gbm)
+library(Metrics)
+library(lattice)
+library(PRROC)
+library(yardstick)
+library(ROCR)
+library(readr)
+library(e1071)
+```
+
+```{r data_read, eval=T, echo=F}
+#| message: false
+#| warning: false
+listings_data<- read_csv("listings (1).csv")
+
+listings_data_cleaned=listings_data %>% mutate(host_since=lubridate::ymd(host_since),
+                         host_response_time=factor(host_response_time,levels=c("within an hour","within a few hours","within a day", "a few days or more")),
+                         host_is_superhost=factor(host_is_superhost,levels=c('TRUE','FALSE')),
+                         room_type=factor(room_type,levels=unique(listings_data$room_type)),
+                         instant_bookable=factor(instant_bookable,level=c('TRUE','FALSE')),
+                         fully_booked_30=factor(fully_booked_30, levels=c('yes','no')),
+                         host_verifications=factor(case_when(host_verifications %in% c("['phone']") ~'phone_only',
+                                                      host_verifications %in% c("['email', 'phone']" ,"['email', 'phone', 'work_email']", "['phone', 'work_email']") ~'phone_email',
+                                                      host_verifications %in% c("['email']") ~'email_only'
+                           
+                         ),levels=c('phone_only','phone_email','email_only'))
+                         
+                         
+                         )
+
+
+
+fixed_month_str=ymd("2026-05-01")
+fixed_month=floor_date(fixed_month_str,unit='month')
+
+listings_data_cleaned$host_since_months_int =listings_data_cleaned %>% mutate(host_since=ymd(host_since)  ) %>% 
+  mutate(host_since_trunc=floor_date(host_since,unit='month')) %>% 
+  
+  mutate(host_since_months_int= interval(host_since_trunc,fixed_month) %/% months(1) ) %>% 
+  
+  mutate(current_date= floor_date( today(),unit='month' ) ) %>% 
+  
+  dplyr::select(host_since_trunc,host_since_months_int,current_date ) %>%
+  
+  pull(host_since_months_int)
+
+ # create intervals for EDA purposes
+a=listings_data_cleaned %>% mutate(host_since_intervals=  cut(host_since_months_int, breaks=c(0,48,96,114,197),labels = c("0-2 yrs", "2-4 yrs", "4-6 yrs",'6+ yrs') )) %>% 
+  group_by(host_since_intervals,fully_booked_30) %>% 
+  summarize(n_cnt=length(host_id)) %>% 
+ggplot(aes(x=fully_booked_30,y=n_cnt, fill=host_since_intervals))+
+  geom_col(position="dodge")+
+  labs(title = "Fully Booked vs Non Fully Booked Host Age",y='#observations',
+       x = "30-day booked status",fill='host age bin')+
+  theme_minimal()
+
+a= listings_data_cleaned %>% ggplot(aes(x=price,fill=fully_booked_30)) +
+  geom_boxplot()+
+    labs(title = "Host Age By 30d Fully Booked Status",x='host age (months)',
+       x = "30-day booked status",fill='30 booked status')+
+  theme_minimal()
+```
+
+```{r eda_plots, eval=TRUE, echo=FALSE}
+#| message: false
+#| warning: false
+#| fig-height: 8.8
+#| fig-width: 15
+num_vars=listings_data_cleaned %>% group_by(fully_booked_30) %>% summarize(
+  avg_host_response_rate=mean(host_response_rate),
+  avg_host_acceptance_rate=mean(host_acceptance_rate),
+  avg_host_listings_count=mean(host_listings_count),
+  avg_price=mean(price),
+  avg_minimum_nights=mean(minimum_nights),
+  avg_review_scores_rating=mean(review_scores_rating)
+)
+
+host_age_dist=listings_data_cleaned %>% ggplot(aes(x=host_since_months_int,fill=fully_booked_30))+
+  geom_boxplot()+
+  labs(title='Host Age Distribution by 30d Fully Booked Status',x='Host Age (months)',fill='Status')+theme_minimal()
+  
+
+
+vars <- c(
+  "host_response_rate",
+  "host_acceptance_rate",
+  "host_listings_count",
+  "price",
+  "minimum_nights",
+  "review_scores_rating"
+)
+
+
+
+# Initialize empty list
+plot_list <- list()
+
+# Loop through variables
+for (var in vars) {
+  
+  # Create summary dataframe dynamically
+  df_plot <- listings_data_cleaned %>%
+    group_by(fully_booked_30) %>%
+    summarise(mean_value = mean(.data[[var]], na.rm = TRUE))
+  
+  # Create plot
+  p <- ggplot(df_plot, aes(x = fully_booked_30, y = mean_value)) +
+    geom_col(fill = "steelblue") +
+    labs(
+      title = paste("Average", gsub("_", " ", var), "by Booking Status"),
+      x = "30-day booked status",
+      y = paste("Average", gsub("_", " ", var))
+    ) +
+    theme_minimal()
+  
+  # Store in list
+  plot_list[[var]] <- p
+}
+
+# View one example
+
+vars <- c(
+  "host_response_rate",
+  "host_acceptance_rate",
+  "host_listings_count",
+  "price",
+  "minimum_nights",
+  "review_scores_rating"
+)
+
+(plot_list[["price"]]+plot_list[["minimum_nights"]]+plot_list[["review_scores_rating"]])/ (plot_list[["host_acceptance_rate"]]+plot_list[["host_response_rate"]]+plot_list[["host_listings_count"]])+host_age_dist
+```
+
+```{r,cleaned_data, echo=F,eval=T}
+features_all=names(listings_data_cleaned)
+features=features_all[! features_all %in% c('host_since','host_id', 'fully_booked_30_lab')]
+
+listings_data_cleaned_features=listings_data_cleaned %>% dplyr::select(any_of(features))
+
+head(listings_data_cleaned_features)
+
+```
+
+```{r svm_fit, eval=T, echo=F}
+#| message: false
+#| warning: false
+
+library(doParallel)
+library(foreach)
+
+# Use grid search to fid the optimal Cost Parameter C
+
+# n_cores <- parallel::detectCores() - 1  # leave one core free
+# cl <- makeCluster(n_cores)
+# clusterEvalQ(cl, library(e1071))
+# registerDoParallel(cl)
+# 
+# tune.control()
+# svm_model <- tune.svm( fully_booked_30~., data=
+# listings_data_cleaned_features,kernel='linear',
+# cost=seq(0.25, 3, by = 0.15),type='C-classification',
+# tunecontrol = tune.control(cross = 10) # k=10 cross validation
+# )
+# stopCluster(cl)
+# registerDoSEQ()
+# save model 
+
+#saveRDS(svm_model, "svm_model.rds")
+liner_svm_model=readRDS("svm_model.rds")
+liner_svm_model$best.model
+
+
+```
+
+```{r}
+
+#| message: false
+#| warning: false
+
+library(doParallel)
+library(foreach)
+
+# Use grid search to fid the optimal Cost Parameter C
+
+n_cores <- parallel::detectCores() - 1  # leave one core free
+cl <- makeCluster(n_cores)
+clusterEvalQ(cl, library(e1071))
+registerDoParallel(cl)
+
+tune.control()
+nl_svm_model <- tune.svm( fully_booked_30~., data=
+listings_data_cleaned_features,kernel='radial',
+cost=seq(0.15, 3, by = 0.15),type='C-classification',
+tunecontrol = tune.control(cross = 10) # k=10 cross validation
+)
+stopCluster(cl)
+registerDoSEQ()
+# save model 
+
+saveRDS(nl_svm_model, "nl_svm_model.rds")
+nl_svm_model=readRDS("nl_svm_model.rds")
+nl_svm_model$best.model
+
+
+
+```
