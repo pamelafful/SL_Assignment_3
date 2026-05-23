@@ -1,11 +1,19 @@
 ---
-title: "AirBnB Listings Modelling"
+title: "Airbnb Bookings Analysis"
+subtitle: "SVM and Nueral Network Model Performance Analysis"
 author: "Pamela Afful"
-format: revealjs
-editor: visual
+format:
+  revealjs:
+    theme: moon
+    slide-number: true
+    transition: slide
+    toc: true
+    code-fold: false
+execute:
+  echo: true
+  warning: false
+  message: false
 ---
-
-## Exploratory Analysis
 
 ```{r lib_read, eval=T, echo=F}
 #| message: false
@@ -52,9 +60,26 @@ library(readr)
 library(e1071)
 ```
 
+# Problem Statement
+
+A new competitor in the private residential market is interested in the Airbnb market in Cape Town and would like an analysis on the key predictors of demand of/ availability of Airbnbs. Demand in this case is proxied by the target variable, fully_booked_30, which is a binary variable that populates 1 if the Airbnb is fully booked in the next 30 days and 0 if not. This is done by using and comparing classification models:
+
+-   SVM with a linear kernel
+
+-   SVM with a radial kernel
+
+-   Feed-forward Neural Network
+
+# Exploratory Analysis
+
+The data is highly imbalanced in favour of the negative class. Since the modelling aims to predict availability, this will be treated as the positive class in modelling- this is the target class.
+
+The data used was listings data containing key attributes across Airbnb IDs.
+
 ```{r data_read, eval=T, echo=F}
 #| message: false
 #| warning: false
+#| 
 listings_data<- read_csv("listings (1).csv")
 
 listings_data_cleaned=listings_data %>% mutate(host_since=lubridate::ymd(host_since),
@@ -156,11 +181,15 @@ listings_data_cleaned %>%
   theme_minimal()
 ```
 
+## Feature Distributions
+
 ```{r eda_plots, eval=TRUE, echo=FALSE}
 #| message: false
 #| warning: false
 #| fig-height: 8.8
 #| fig-width: 15
+
+
 num_vars=listings_data_cleaned %>% group_by(fully_booked_30) %>% summarize(
   avg_host_response_rate=mean(host_response_rate),
   avg_host_acceptance_rate=mean(host_acceptance_rate),
@@ -226,198 +255,11 @@ vars <- c(
 (plot_list[["price"]]+plot_list[["minimum_nights"]]+plot_list[["review_scores_rating"]])/ (plot_list[["host_acceptance_rate"]]+plot_list[["host_response_rate"]]+plot_list[["host_listings_count"]])+host_age_dist
 ```
 
-```{r,cleaned_data, echo=F,eval=T}
-features_all=names(listings_data_cleaned)
-features=features_all[! features_all %in% c('host_since','host_id', 'fully_booked_30_lab')]
+# Model Training
 
-listings_data_cleaned_features=listings_data_cleaned %>% dplyr::select(any_of(features))
+## Linear Kernel SVM
 
-head(listings_data_cleaned_features)
-
-```
-
-```{r svm_fit, eval=T, echo=F}
-#| message: false
-#| warning: false
-
-library(doParallel)
-library(foreach)
-
-# Use grid search to fid the optimal Cost Parameter C
-
-# n_cores <- parallel::detectCores() - 1  # leave one core free
-# cl <- makeCluster(n_cores)
-# clusterEvalQ(cl, library(e1071))
-# registerDoParallel(cl)
-# 
-# tune.control()
-# svm_model <- tune.svm( fully_booked_30~., data=
-# listings_data_cleaned_features,kernel='linear',
-# cost=seq(0.15, 3, by = 0.15),type='C-classification',
-# tunecontrol = tune.control(cross = 10) # k=10 cross validation
-# )
-# stopCluster(cl)
-# registerDoSEQ()
-# save model 
-
-#saveRDS(svm_model, "svm_model.rds")
+```{r, svm_model_perf, eval=T, echo=F}
 liner_svm_model=readRDS("svm_model.rds")
-liner_svm_model$best.model
-
-
-```
-
-```{r}
-
-#| message: false
-#| warning: false
-
-library(doParallel)
-library(foreach)
-
-# Use grid search to fid the optimal Cost Parameter C
-
-#n_cores <- parallel::detectCores() - 1  # leave one core free
-# cl <- makeCluster(n_cores)
-# clusterEvalQ(cl, library(e1071))
-# registerDoParallel(cl)
-# 
-# tune.control()
-# nl_svm_model <- tune.svm( fully_booked_30~., data=
-# listings_data_cleaned_features,kernel='radial',
-# cost=seq(0.15, 3, by = 0.15),type='C-classification',
-# tunecontrol = tune.control(cross = 10) # k=10 cross validation
-# )
-# stopCluster(cl)
-# registerDoSEQ()
-# # save model 
-# 
-# saveRDS(nl_svm_model, "nl_svm_model.rds")
-nl_svm_model=readRDS("nl_svm_model.rds")
-nl_svm_model$best.model
-
-```
-
-```{r nn_fit, eval=T, echo=F}
-#| message: false
-#| warning: false
-
-
-
-
-Sys.setenv(JAVA_HOME="C:/Program Files/Java/jdk-26.0.1")
-
-library(h2o)
-library(caret)
-local_h2o <- h2o.init()
-
-options("h2o.use.data.table" = FALSE)
-
-```
-
-```{r,scale_train_test_split, echo=F, eval=T}
-
-# scale features
-
-x=data.matrix(subset(listings_data_cleaned_features, select=-fully_booked_30));
-train_scaled=data.frame(scale(x, center = TRUE, scale = TRUE))
-
-
-train_scaled$fully_booked_30=listings_data_cleaned_features$fully_booked_30
-
-names(subset(train_scaled,select=-fully_booked_30))
-
-
-listings_h2o_train <- as.h2o(train_scaled)
-
-```
-
-Apply regularisation to hedge against over fitting
-
-```{r,nn_gridsearch,eval=T,echo=F}
-hidden_options <- list(c(5), c(10), c(15), c(15,10,5))
-l1_options <- c(0.05,0.15,0.25) #l1 options
-epochs_options <- c(500, 1000, 1500,2000)
-
-feature_names=names(subset(train_scaled,select=-fully_booked_30))
-target=names(subset(train_scaled,select=fully_booked_30))
-
-
-
-n_cores <- parallel::detectCores() - 1  # leave one core free
-cl <- makeCluster(n_cores)
-clusterEvalQ(cl, library(h2o))
-registerDoParallel(cl)
-
-listings_grid <- h2o.grid(
-  algorithm = "deeplearning",
-  grid_id = "listings_nn_grid",
-  hyper_params = list(
-    hidden = hidden_options,
-    l1 = l1_options,
-    epochs = epochs_options
-  ),
-  x = feature_names,
-  y = target,
-  training_frame = listings_h2o_train,
-  activation = "Tanh",
-  seed = 1,
-  reproducible = TRUE,
-  fold_assignment = "Stratified", # for balanced validation/train sets since data is imbalanced
-  nfolds = 10
-)
-
-
-
-
-stopCluster(cl)
-registerDoSEQ()
-
-#saveRDS(listings_grid, "nn_listings_grid.rds")
-nn_model=readRDS("nn_listings_grid.rds")
-
-
-grid_results=h2o.getGrid(
-  grid_id = "listings_nn_grid",
-  sort_by = "logloss", # USE as choosing metrics
-  decreasing = FALSE # We want the smallest logloss at the top
-)
-
-
-
-
-```
-
-```{r,nn_best,eval=TRUE,echo=F}
-
-library(ggplot2)
-library(plotly)
-best_model=grid_results@model_ids[[1]]
-
-sort(unique(grid_metrics$l1))
-
-# Get model results
-grid_metrics=data.frame(grid_results@summary_table)
-fig=grid_metrics %>% mutate(l1=factor(l1, levels= sort(unique(grid_metrics$l1))),
-                            hidden=factor(hidden, levels= c('5','10','15',"[15, 10, 5]") )
-                            ) %>% 
-  group_by(hidden,l1) %>% 
-  summarize(cv_logloss=mean(logloss)) %>% 
-  ggplot(aes(x=l1,y=cv_logloss)) +
-  #geom_line()+
-  geom_bar(fill='steelblue',stat = "identity", position = "dodge")+
-  
-  facet_wrap(.~hidden,scales='free_y',labeller =label_both)+
-  #coord_cartesian(ylim = c(0.443, 0.4577))+
-  labs(title='NN Gridsearch Summary',x='epochs',y='CV Log Loss')+
-  theme_minimal()
-ggplotly(fig)
-```
-
-```{r, nn_best_model, echo=F, eval=TRUE}
-
-best_model=h2o.getModel(grid_results@model_ids[[1]])
-
-best_model_perf=h2o.performance(model = best_model)
-best_model_perf
+liner_svm_model$performances
 ```
