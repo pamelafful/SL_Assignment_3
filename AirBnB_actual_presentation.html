@@ -150,6 +150,7 @@ Pamela Afful
 <li><a href="#/model-training" id="/toc-model-training">Model Training</a>
 <ul>
 <li><a href="#/linear-kernel-svm" id="/toc-linear-kernel-svm">Linear Kernel SVM</a></li>
+<li><a href="#/non-linear-svm-tuning-summary" id="/toc-non-linear-svm-tuning-summary">Non-Linear SVM Tuning Summary</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -201,31 +202,33 @@ Pamela Afful
 </section>
 <section id="linear-kernel-svm" class="slide level2">
 <h2>Linear Kernel SVM</h2>
+
+<img data-src="AirBnB_actual_presentation_files/figure-revealjs/svm_model_perf-1.png" width="960" class="r-stretch"></section>
+<section id="non-linear-svm-tuning-summary" class="slide level2">
+<h2>Non-Linear SVM Tuning Summary</h2>
+<p>Cross-validation was used to train a radial-kernel SVM on the data. This kernel has an additional similarity parameter which controls the rate of similarity between points based on their distance; thus, this needs to be tuned during the cross-validation process.</p>
 <div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>   cost  error  dispersion
-1  0.15 0.1834 0.008016649
-2  0.30 0.1834 0.008016649
-3  0.45 0.1834 0.008016649
-4  0.60 0.1834 0.008016649
-5  0.75 0.1834 0.008016649
-6  0.90 0.1834 0.008016649
-7  1.05 0.1835 0.008195527
-8  1.20 0.1835 0.008195527
-9  1.35 0.1835 0.008195527
-10 1.50 0.1835 0.008195527
-11 1.65 0.1835 0.008195527
-12 1.80 0.1835 0.008195527
-13 1.95 0.1835 0.008195527
-14 2.10 0.1835 0.008195527
-15 2.25 0.1835 0.008195527
-16 2.40 0.1835 0.008195527
-17 2.55 0.1835 0.008195527
-18 2.70 0.1835 0.008195527
-19 2.85 0.1835 0.008195527
-20 3.00 0.1835 0.008195527</code></pre>
+<div class="cell-output-display">
+<table class="caption-top">
+<thead>
+<tr class="header">
+<th style="text-align: right;">best_cost</th>
+<th style="text-align: right;">best_gamma</th>
+<th style="text-align: right;">best_cross_validation_error</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">0.45</td>
+<td style="text-align: right;">0.1804</td>
+</tr>
+</tbody>
+</table>
 </div>
 </div>
+
+<img data-src="tune_summ.png" width="498" class="r-stretch quarto-figure-center"><p class="caption">Non-linear SVM Tuning Summary</p><p>Across parameter combinations, the model starts to overfit as the gamma parameter increases past 0.50, as well as some higher values of gamma, past its optimal value.</p>
 
 </section></section>
     </div>
@@ -399,7 +402,7 @@ Pamela Afful
         backgroundTransition: 'none',
 
         // Number of slides away from the current that are visible
-        viewDistance: 3,
+        viewDistance: 10,
 
         // Number of slides away from the current that are visible on mobile
         // devices. It is advisable to set this to a lower number than
@@ -415,11 +418,6 @@ Pamela Afful
 
         // Factor of the display size that should remain empty around the content
         margin: 0.1,
-
-        // Bounds for smallest/largest possible scale to apply to content
-        minScale: 0.2,
-
-        maxScale: 2,
 
         math: {
           mathjax: 'https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js',
