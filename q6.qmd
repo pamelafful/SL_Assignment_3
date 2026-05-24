@@ -17,7 +17,7 @@ y_mean=	22.5300
 y_sd=9.197104
 
 scaled=function(x,mean_,sd_){
-  x_scaled=(round(x,3)- round(mean_,3))/round(sd_,3)
+  x_scaled=(x- mean_)/sd_
   return( round(x_scaled,3))
   
 }
@@ -39,11 +39,11 @@ z=function(x,w){
  return(prod)
   
 }
-z(1:3,1:3)
+
 
 x=c(1,-0.417,-0.487,-0.740)
 w=c(0.5,1.2,-2.5,0.8)
-z_val=round(z(x,w),3)
+z_val=round(z(x,w),3);z_val
 
 relu <- function(x) pmax(0, x)
 relu(z_val)
@@ -75,7 +75,7 @@ w0.der=round(-(y_st-yhat),3);w0.der
 
 w1.der=round(-(y_st-yhat)*x1_st,3);w1.der
 
-w0_new=round(w0-(alpha*w0.der),3);w0_new
+w0_new=round(w0+(alpha*w0.der),3);w0_new
 
 
 w1_new=round(w1-(alpha*w1.der),3);w1_new
@@ -114,19 +114,42 @@ test=pima[-inds[['Resample1']],]
 
 scale_training=data.frame(scale(data.matrix(training[,-ncol(training)]), center = TRUE, scale = TRUE))
 scale_training$testDiabetes =training$testDiabetes
-scale_test=data.frame(scale(data.matrix(test[,-ncol(test)]), center = TRUE, scale = TRUE))
+
+train_center <- vapply(training[,-ncol(training)], mean, numeric(1))
+train_scale <- vapply(training[,-ncol(training)], sd, numeric(1))
+
+scale_test=data.frame(scale(data.matrix(test[,-ncol(test)]), center = train_center, scale = train_scale))
 scale_test$testDiabetes =test$testDiabetes
 
 ```
 
 ```{r}
+set.seed(1)
 pima_nn <- neuralnet(
  testDiabetes ~ .,
   data = scale_training,
   hidden = c(3),
+  err.fct='ce',
+  act.fct = "logistic",
+  linear.output = FALSE
+)
+
+
+str(pima)
+```
+
+```{r}
+test_pima_nn <- neuralnet(
+ testDiabetes ~Pregnantfreq+glucoseConc,
+  data = scale_training,
+  hidden = c(2),
   act.fct = "logistic",
   linear.output = TRUE
 )
+plot(test_pima_nn)
+
+weights=test_pima_nn$weights[[1]]
+length(weights[[1]])+length(weights[[2]])
 ```
 
 ```{r}
@@ -139,5 +162,504 @@ total_w=length(wei_ghts[[1]])+length(wei_ghts[[2]]);total_w
 library(dplyr)
 train_pred <- predict(pima_nn, scale_training)
 train_pred_df=data.frame(train_pred)
-train_pred_df %>% rename(prob_no=X1,prob_yes=X2)
+train_pred_df=train_pred_df %>% rename(prob_no=X1,prob_yes=X2)
+train_pred_df=train_pred_df %>% mutate(pred_label=if_else(prob_yes>=0.5,1,0))
+train_pred_df$testDiabetes=scale_training$testDiabetes
+corr_rate=sum(train_pred_df$testDiabetes==train_pred_df$pred_label)/length(scale_training$testDiabetes)
+round(corr_rate*100,3)
+```
+
+```{r}
+test_pred <- predict(pima_nn, newdata=scale_test)
+test_pred_df=data.frame(test_pred)
+test_pred_df=test_pred_df %>% rename(prob_no=X1,prob_yes=X2)
+test_pred_df=test_pred_df %>% mutate(pred_label=if_else(prob_yes>=0.5,1,0))
+test_pred_df$testDiabetes=scale_test$testDiabetes
+corr_rate=sum(test_pred_df$testDiabetes==test_pred_df$pred_label)/length(scale_test$testDiabetes)
+round(corr_rate*100,3)
+```
+
+```{r}
+layer_1=pima_nn$weights[[1]][[1]]
+layer_2=pima_nn$weights[[1]][[2]];layer_2
+w12=layer_1[2,2];w12
+w32=layer_2[4,2];w32
+```
+
+```{r}
+library(caret)
+library(neuralnet)
+library(dplyr)
+
+set.seed(1)
+
+# Create folds
+folds <- createFolds(training$testDiabetes, k = 10)
+
+# Scaling helper function
+scale_helper <- function(train, test,
+                         target = "testDiabetes") {
+
+  # Remove target column
+  train_subset <- subset(
+    train,
+    select = -which(names(train) == target)
+  )
+
+  # Compute scaling parameters from training data
+  tr_center <- vapply(train_subset,
+                      mean,
+                      numeric(1))
+
+  tr_scale <- vapply(train_subset,
+                     sd,
+                     numeric(1))
+
+  # Scale training data
+  train_st <- as.data.frame(
+    scale(
+      data.matrix(train_subset),
+      center = tr_center,
+      scale = tr_scale
+    )
+  )
+
+  train_st[[target]] <- train[[target]]
+
+  # Remove target column from test data
+  test_subset <- subset(
+    test,
+    select = -which(names(test) == target)
+  )
+
+  # Scale test data using TRAIN scaling parameters
+  test_st <- as.data.frame(
+    scale(
+      data.matrix(test_subset),
+      center = tr_center,
+      scale = tr_scale
+    )
+  )
+
+  test_st[[target]] <- test[[target]]
+
+  return(list(
+    train = train_st,
+    test = test_st
+  ))
+}
+
+# Cross-validation
+cv_accuracy <- vapply(folds, function(fold) {
+
+  # Split + scale
+  scaled <- scale_helper(
+    training[-fold, ],
+    training[fold, ]
+  )
+
+  # Fit neural network
+  fit <- neuralnet(
+    testDiabetes ~ .,
+    data = scaled$train,
+    hidden = c(1),   # Change architecture here
+    act.fct = "logistic",
+    err.fct = "ce",
+    linear.output = FALSE
+  )
+
+  # Predict probabilities
+  test_pred <- predict(fit, scaled$test)
+
+  # Convert predictions to dataframe
+  test_pred_df <- data.frame(test_pred)
+
+  # Rename probability columns
+  colnames(test_pred_df) <- c(
+    "prob_no",
+    "prob_yes"
+  )
+
+  # Create predicted labels
+  test_pred_df <- test_pred_df %>%
+    mutate(
+      pred_label =
+        if_else(prob_yes >= 0.5, 1, 0)
+    )
+
+  # Add actual labels
+  test_pred_df$testDiabetes <-
+    scaled$test$testDiabetes
+
+  # Compute accuracy
+  corr_rate <- mean(
+    test_pred_df$testDiabetes ==
+      test_pred_df$pred_label
+  )
+
+  return(corr_rate)
+
+}, numeric(1))
+
+# Mean CV accuracy
+mean(cv_accuracy)
+```
+
+```{r}
+
+library(caret)
+library(neuralnet)
+library(dplyr)
+
+set.seed(1)
+
+# Create folds
+folds <- createFolds(training$testDiabetes, k = 10)
+
+# Scaling helper function
+scale_helper <- function(train, test,
+                         target = "testDiabetes") {
+
+  # Remove target column
+  train_subset <- subset(
+    train,
+    select = -which(names(train) == target)
+  )
+
+  # Compute scaling parameters from training data
+  tr_center <- vapply(train_subset,
+                      mean,
+                      numeric(1))
+
+  tr_scale <- vapply(train_subset,
+                     sd,
+                     numeric(1))
+
+  # Scale training data
+  train_st <- as.data.frame(
+    scale(
+      data.matrix(train_subset),
+      center = tr_center,
+      scale = tr_scale
+    )
+  )
+
+  train_st[[target]] <- train[[target]]
+
+  # Remove target column from test data
+  test_subset <- subset(
+    test,
+    select = -which(names(test) == target)
+  )
+
+  # Scale test data using TRAIN scaling parameters
+  test_st <- as.data.frame(
+    scale(
+      data.matrix(test_subset),
+      center = tr_center,
+      scale = tr_scale
+    )
+  )
+
+  test_st[[target]] <- test[[target]]
+
+  return(list(
+    train = train_st,
+    test = test_st
+  ))
+}
+
+# Cross-validation
+cv_accuracy <- vapply(folds, function(fold) {
+
+  # Split + scale
+  scaled <- scale_helper(
+    training[-fold, ],
+    training[fold, ]
+  )
+
+  # Fit neural network
+  fit <- neuralnet(
+    testDiabetes ~ .,
+    data = scaled$train,
+    hidden = c(2),   # Change architecture here
+    act.fct = "logistic",
+    err.fct = "ce",
+    linear.output = FALSE
+  )
+
+  # Predict probabilities
+  test_pred <- predict(fit, scaled$test)
+
+  # Convert predictions to dataframe
+  test_pred_df <- data.frame(test_pred)
+
+  # Rename probability columns
+  colnames(test_pred_df) <- c(
+    "prob_no",
+    "prob_yes"
+  )
+
+  # Create predicted labels
+  test_pred_df <- test_pred_df %>%
+    mutate(
+      pred_label =
+        if_else(prob_yes >= 0.5, 1, 0)
+    )
+
+  # Add actual labels
+  test_pred_df$testDiabetes <-
+    scaled$test$testDiabetes
+
+  # Compute accuracy
+  corr_rate <- mean(
+    test_pred_df$testDiabetes ==
+      test_pred_df$pred_label
+  )
+
+  return(corr_rate)
+
+}, numeric(1))
+
+# Mean CV accuracy
+mean(cv_accuracy)
+
+```
+
+```{r}
+library(caret)
+library(neuralnet)
+library(dplyr)
+
+set.seed(1)
+
+# Create folds
+folds <- createFolds(training$testDiabetes, k = 10)
+
+# Scaling helper function
+scale_helper <- function(train, test,
+                         target = "testDiabetes") {
+
+  # Remove target column
+  train_subset <- subset(
+    train,
+    select = -which(names(train) == target)
+  )
+
+  # Compute scaling parameters from training data
+  tr_center <- vapply(train_subset,
+                      mean,
+                      numeric(1))
+
+  tr_scale <- vapply(train_subset,
+                     sd,
+                     numeric(1))
+
+  # Scale training data
+  train_st <- as.data.frame(
+    scale(
+      data.matrix(train_subset),
+      center = tr_center,
+      scale = tr_scale
+    )
+  )
+
+  train_st[[target]] <- train[[target]]
+
+  # Remove target column from test data
+  test_subset <- subset(
+    test,
+    select = -which(names(test) == target)
+  )
+
+  # Scale test data using TRAIN scaling parameters
+  test_st <- as.data.frame(
+    scale(
+      data.matrix(test_subset),
+      center = tr_center,
+      scale = tr_scale
+    )
+  )
+
+  test_st[[target]] <- test[[target]]
+
+  return(list(
+    train = train_st,
+    test = test_st
+  ))
+}
+
+# Cross-validation
+cv_accuracy <- vapply(folds, function(fold) {
+
+  # Split + scale
+  scaled <- scale_helper(
+    training[-fold, ],
+    training[fold, ]
+  )
+
+  # Fit neural network
+  fit <- neuralnet(
+    testDiabetes ~ .,
+    data = scaled$train,
+    hidden = c(6),   # Change architecture here
+    act.fct = "logistic",
+    err.fct = "ce",
+    linear.output = FALSE
+  )
+
+  # Predict probabilities
+  test_pred <- predict(fit, scaled$test)
+
+  # Convert predictions to dataframe
+  test_pred_df <- data.frame(test_pred)
+
+  # Rename probability columns
+  colnames(test_pred_df) <- c(
+    "prob_no",
+    "prob_yes"
+  )
+
+  # Create predicted labels
+  test_pred_df <- test_pred_df %>%
+    mutate(
+      pred_label =
+        if_else(prob_yes >= 0.5, 1, 0)
+    )
+
+  # Add actual labels
+  test_pred_df$testDiabetes <-
+    scaled$test$testDiabetes
+
+  # Compute accuracy
+  corr_rate <- mean(
+    test_pred_df$testDiabetes ==
+      test_pred_df$pred_label
+  )
+
+  return(corr_rate)
+
+}, numeric(1))
+
+# Mean CV accuracy
+mean(cv_accuracy)
+```
+
+```{r}
+library(caret)
+library(neuralnet)
+library(dplyr)
+
+set.seed(1)
+
+# Create folds
+folds <- createFolds(training$testDiabetes, k = 10)
+
+# Scaling helper function
+scale_helper <- function(train, test,
+                         target = "testDiabetes") {
+
+  # Remove target column
+  train_subset <- subset(
+    train,
+    select = -which(names(train) == target)
+  )
+
+  # Compute scaling parameters from training data
+  tr_center <- vapply(train_subset,
+                      mean,
+                      numeric(1))
+
+  tr_scale <- vapply(train_subset,
+                     sd,
+                     numeric(1))
+
+  # Scale training data
+  train_st <- as.data.frame(
+    scale(
+      data.matrix(train_subset),
+      center = tr_center,
+      scale = tr_scale
+    )
+  )
+
+  train_st[[target]] <- train[[target]]
+
+  # Remove target column from test data
+  test_subset <- subset(
+    test,
+    select = -which(names(test) == target)
+  )
+
+  # Scale test data using TRAIN scaling parameters
+  test_st <- as.data.frame(
+    scale(
+      data.matrix(test_subset),
+      center = tr_center,
+      scale = tr_scale
+    )
+  )
+
+  test_st[[target]] <- test[[target]]
+
+  return(list(
+    train = train_st,
+    test = test_st
+  ))
+}
+
+# Cross-validation
+cv_accuracy <- vapply(folds, function(fold) {
+
+  # Split + scale
+  scaled <- scale_helper(
+    training[-fold, ],
+    training[fold, ]
+  )
+
+  # Fit neural network
+  fit <- neuralnet(
+    testDiabetes ~ .,
+    data = scaled$train,
+    hidden = c(10),   # Change architecture here
+    act.fct = "logistic",
+    err.fct = "ce",
+    linear.output = FALSE
+  )
+
+  # Predict probabilities
+  test_pred <- predict(fit, scaled$test)
+
+  # Convert predictions to dataframe
+  test_pred_df <- data.frame(test_pred)
+
+  # Rename probability columns
+  colnames(test_pred_df) <- c(
+    "prob_no",
+    "prob_yes"
+  )
+
+  # Create predicted labels
+  test_pred_df <- test_pred_df %>%
+    mutate(
+      pred_label =
+        if_else(prob_yes >= 0.5, 1, 0)
+    )
+
+  # Add actual labels
+  test_pred_df$testDiabetes <-
+    scaled$test$testDiabetes
+
+  # Compute accuracy
+  corr_rate <- mean(
+    test_pred_df$testDiabetes ==
+      test_pred_df$pred_label
+  )
+
+  return(corr_rate)
+
+}, numeric(1))
+
+# Mean CV accuracy
+mean(cv_accuracy)
 ```
