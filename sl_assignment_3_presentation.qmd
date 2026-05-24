@@ -232,7 +232,7 @@ features=features_all[! features_all %in% c('host_since','host_id', 'fully_booke
 
 listings_data_cleaned_features=listings_data_cleaned %>% dplyr::select(any_of(features))
 
-head(listings_data_cleaned_features)
+#write.csv(listings_data_cleaned_features,'listings_data_cleaned_features.csv')
 
 ```
 

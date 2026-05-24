@@ -4,12 +4,17 @@ subtitle: "SVM and Nueral Network Model Performance Analysis"
 author: "Pamela Afful"
 format:
   revealjs:
-    theme: moon
+    theme: simple
     slide-number: true
     transition: slide
     toc: true
     code-fold: false
-    view-distance: 10
+    view-distance: 2
+    width: 1280
+    height: 720
+    margin: 0.05
+    min-scale: 0.2
+    max-scale: 1.0
 execute:
   echo: true
   warning: false
@@ -134,7 +139,7 @@ a= listings_data_cleaned %>% ggplot(aes(x=price,fill=fully_booked_30)) +
 ```{r target_dist, eval=TRUE, echo=F}
 #| message: false
 #| warning: false
-#| fig-height: 6
+#| fig-height: 5
 #| fig-subcap: Spatial Plot of BNB Listings,Fully Booked 30 Label Distribution
 #| fig-width: 8
 #| layout-ncol: 2
@@ -184,11 +189,15 @@ listings_data_cleaned %>%
 
 ## Feature Distributions
 
+some text here
+
 ```{r eda_plots, eval=TRUE, echo=F}
 #| message: false
 #| warning: false
-#| fig-height: 7
+#| fig-height: 6
 #| fig-width: 15
+#| out-width: 80%
+#| fig-cap: Feature Averages and Distributions Grouped by Target 
 
 num_vars=listings_data_cleaned %>% group_by(fully_booked_30) %>% summarize(
   avg_host_response_rate=mean(host_response_rate),
@@ -257,42 +266,136 @@ print( (plot_list[["price"]]+plot_list[["minimum_nights"]]+plot_list[["review_sc
        
 ```
 
-# Model Training
+# Linear Kernel SVM
 
-## Linear Kernel SVM
+some text here
 
-```{r, svm_model_perf, eval=T, echo=F}
+```{r svm_model_perf, echo=FALSE}
+#| warning: false
+#| message: false
+#| fig-width: 5
+#| fig-height: 5
+
 liner_svm_model=readRDS("svm_model.rds")
+
+listings_data_cleaned_features=read.csv('listings_data_cleaned_features.csv')
+
+listings_data_cleaned_features=listings_data_cleaned_features[,-1]
+
+
+train_predictions=predict(liner_svm_model$best.model)
+listings_data_cleaned_features$predictions=unname(train_predictions)
+
+training_correct_classification_rate=sum(listings_data_cleaned_features$predictions==listings_data_cleaned_features$fully_booked_30)/length(listings_data_cleaned_features$fully_booked_30)
+
+
+summ_table <- tibble(
+  Metric = c(
+    "model_name",
+    "best_cost",
+    "nr.support_vectors",
+    "best_cross_validation_error",
+    "best_training_accuracy"
+  ),
+  Value = c(
+    "Linear Kernal SVM",
+    liner_svm_model$best.parameters,
+    length(liner_svm_model$best.model$index),
+    round(liner_svm_model$best.performance, 2),
+    round(training_correct_classification_rate, 2)
+  )
+)
+
+kable(summ_table, caption = 'Linear Kernal SVM Best Model Summary')
+```
+
+```{r svm_linear_tune_summ, eval=TRUE, echo=FALSE}
+#| message: false
+#| warning: false
+#| fig-height: 5
+#| fig-width: 6
+#| out-width: 80%
+#| fig-cap: Linear Kernal SVM CV Error vs Cost
+
+
 liner_svm_model$performances %>% 
   ggplot(aes(x=cost,y=error))+
   geom_line(color='steelblue')+
   geom_point(color='steelblue')+
   labs(title='Liner Kervel SVM CV Error vs Cost', y='CV Error')+
   theme_minimal()
-  
 ```
 
 ## Non-Linear SVM Tuning Summary
 
 Cross-validation was used to train a radial-kernel SVM on the data. This kernel has an additional similarity parameter which controls the rate of similarity between points based on their distance; thus, this needs to be tuned during the cross-validation process.
 
-```{r,eval=F,echo=F}
+```{r,trainin_acc,eval=T,echo=F}
+#| message: false
+#| warning: false
+#| fig-height: 5
+#| fig-width: 6
+
 nl_svm_model=readRDS("nl_svm_model.rds")
-predict(nl_svm_model,
+train_predictions=predict(nl_svm_model$best.model)
+# load training data
+
+listings_data_cleaned_features=read.csv('listings_data_cleaned_features.csv')
+
+
+listings_data_cleaned_features=listings_data_cleaned_features[,-1]
+train_predictions=predict(nl_svm_model$best.model)
+
+
+listings_data_cleaned_features$predictions=unname(train_predictions)
+
+# get training classification rate
+
+training_correct_classification_rate=sum(listings_data_cleaned_features$predictions==listings_data_cleaned_features$fully_booked_30)/length(listings_data_cleaned_features$fully_booked_30)
+
 ```
 
 ```{r nl_svm, eval=T, echo=FALSE}
 #| message: false
 #| warning: false
 #| fig-height: 6
-#| output-location: slide
+#| out-width: 80%
+#| fig-cap: Linear Kernal SVM CV Error vs Cost
+
 
 nl_svm_model=readRDS("nl_svm_model.rds")
-kable(data.frame(
-  best_cost = nl_svm_model$best.parameters$cost,
-  best_gamma = nl_svm_model$best.parameters$gamma,
-  best_cross_validation_error = nl_svm_model$best.performance
-))
+# kable(data.frame(
+#   model_name='Non-Linear Kernal SVM',
+#   nr.support_vectors=length(nl_svm_model$best.model$index),
+#   best_cost = nl_svm_model$best.parameters$cost,
+#   best_gamma = nl_svm_model$best.parameters$gamma,
+#   best_cross_validation_error = round(nl_svm_model$best.performance,2),
+#   best_training_accuracy=round(training_correct_classification_rate,2)
+# ))
+
+
+
+summ_table <- tibble(
+  Metric = c(
+    "model_name",
+    "nr.support_vectors",
+    "best_cost",
+    "best_gamma",
+    "best_cross_validation_error",
+    "best_training_accuracy"
+  ),
+  Value = c(
+    "Non-Linear Kernal SVM",
+    length(nl_svm_model$best.model$index),
+    nl_svm_model$best.parameters$cost,
+    nl_svm_model$best.parameters$gamma,
+    round(nl_svm_model$best.performance, 2),
+    round(training_correct_classification_rate, 2)
+  )
+)
+
+kable(summ_table)
+
 
 svm_nl_grid_per=nl_svm_model$performances
 min_err=min(svm_nl_grid_per$error)
@@ -305,7 +408,7 @@ b=paste("best gamma:",best_gamm)
 
 
 
-tune_summ=svm_nl_grid_per %>% group_by(gamma,cost) %>% 
+svm_nl_grid_per %>% group_by(gamma,cost) %>% 
   summarize(cv_error=mean(error)) %>% 
   mutate(cost=factor(cost,levels=  sort(unique(svm_nl_grid_per$cost)))) %>% 
   ggplot(aes(x=gamma,y=cv_error,color=cost)) +
@@ -321,7 +424,5 @@ tune_summ=svm_nl_grid_per %>% group_by(gamma,cost) %>%
   theme_minimal()
   
 ```
-
-![Non-linear SVM Tuning Summary](tune_summ.png){width="498"}
 
 Across parameter combinations, the model starts to overfit as the gamma parameter increases past 0.50, as well as some higher values of gamma, past its optimal value.

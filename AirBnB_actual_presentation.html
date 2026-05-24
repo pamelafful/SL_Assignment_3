@@ -6,7 +6,7 @@
 <script src="AirBnB_actual_presentation_files/libs/quarto-html/tippy.umd.min.js"></script>
 <link href="AirBnB_actual_presentation_files/libs/quarto-html/tippy.css" rel="stylesheet">
 <link href="AirBnB_actual_presentation_files/libs/quarto-html/light-border.css" rel="stylesheet">
-<link href="AirBnB_actual_presentation_files/libs/quarto-html/quarto-syntax-highlighting-dark-707d8167ce6003fca903bfe2be84ab7f.css" rel="stylesheet" id="quarto-text-highlighting-styles"><meta charset="utf-8">
+<link href="AirBnB_actual_presentation_files/libs/quarto-html/quarto-syntax-highlighting-7b89279ff1a6dce999919e0e67d4d9ec.css" rel="stylesheet" id="quarto-text-highlighting-styles"><meta charset="utf-8">
   <meta name="generator" content="quarto-1.8.25">
 
   <meta name="author" content="Pamela Afful">
@@ -29,7 +29,7 @@
       vertical-align: middle;
     }
   </style>
-  <link rel="stylesheet" href="AirBnB_actual_presentation_files/libs/revealjs/dist/theme/quarto-06e768f098560084c2d7120de8ad04fb.css">
+  <link rel="stylesheet" href="AirBnB_actual_presentation_files/libs/revealjs/dist/theme/quarto-0fde88a82f0356838740f155f1088782.css">
   <link href="AirBnB_actual_presentation_files/libs/revealjs/plugin/quarto-line-highlight/line-highlight.css" rel="stylesheet">
   <link href="AirBnB_actual_presentation_files/libs/revealjs/plugin/reveal-menu/menu.css" rel="stylesheet">
   <link href="AirBnB_actual_presentation_files/libs/revealjs/plugin/reveal-menu/quarto-menu.css" rel="stylesheet">
@@ -122,7 +122,7 @@
     }
   </style>
 </head>
-<body class="quarto-dark">
+<body class="quarto-light">
   <div class="reveal">
     <div class="slides">
 
@@ -147,9 +147,8 @@ Pamela Afful
 <ul>
 <li><a href="#/feature-distributions" id="/toc-feature-distributions">Feature Distributions</a></li>
 </ul></li>
-<li><a href="#/model-training" id="/toc-model-training">Model Training</a>
+<li><a href="#/linear-kernel-svm" id="/toc-linear-kernel-svm">Linear Kernel SVM</a>
 <ul>
-<li><a href="#/linear-kernel-svm" id="/toc-linear-kernel-svm">Linear Kernel SVM</a></li>
 <li><a href="#/non-linear-svm-tuning-summary" id="/toc-non-linear-svm-tuning-summary">Non-Linear SVM Tuning Summary</a></li>
 </ul></li>
 </ul>
@@ -193,17 +192,50 @@ Pamela Afful
 </section>
 <section id="feature-distributions" class="slide level2">
 <h2>Feature Distributions</h2>
+<p>some text here</p>
 
-<img data-src="AirBnB_actual_presentation_files/figure-revealjs/eda_plots-1.png" width="1440" class="r-stretch"></section></section>
+<img data-src="AirBnB_actual_presentation_files/figure-revealjs/eda_plots-1.png" style="width:80.0%" class="r-stretch quarto-figure-center"><p class="caption">Feature Averages and Distributions Grouped by Target</p></section></section>
 <section>
-<section id="model-training" class="title-slide slide level1 center">
-<h1>Model Training</h1>
+<section id="linear-kernel-svm" class="title-slide slide level1 center">
+<h1>Linear Kernel SVM</h1>
+<p>some text here</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top">
+<caption>Linear Kernal SVM Best Model Summary</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Metric</th>
+<th style="text-align: left;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">model_name</td>
+<td style="text-align: left;">Linear Kernal SVM</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">best_cost</td>
+<td style="text-align: left;">0.15</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">nr.support_vectors</td>
+<td style="text-align: left;">3807</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">best_cross_validation_error</td>
+<td style="text-align: left;">0.18</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">best_training_accuracy</td>
+<td style="text-align: left;">0.82</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 
-</section>
-<section id="linear-kernel-svm" class="slide level2">
-<h2>Linear Kernel SVM</h2>
-
-<img data-src="AirBnB_actual_presentation_files/figure-revealjs/svm_model_perf-1.png" width="960" class="r-stretch"></section>
+<img data-src="AirBnB_actual_presentation_files/figure-revealjs/svm_linear_tune_summ-1.png" style="width:80.0%" class="r-stretch quarto-figure-center"><p class="caption">Linear Kernal SVM CV Error vs Cost</p></section>
 <section id="non-linear-svm-tuning-summary" class="slide level2">
 <h2>Non-Linear SVM Tuning Summary</h2>
 <p>Cross-validation was used to train a radial-kernel SVM on the data. This kernel has an additional similarity parameter which controls the rate of similarity between points based on their distance; thus, this needs to be tuned during the cross-validation process.</p>
@@ -212,23 +244,42 @@ Pamela Afful
 <table class="caption-top">
 <thead>
 <tr class="header">
-<th style="text-align: right;">best_cost</th>
-<th style="text-align: right;">best_gamma</th>
-<th style="text-align: right;">best_cross_validation_error</th>
+<th style="text-align: left;">Metric</th>
+<th style="text-align: left;">Value</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td style="text-align: right;">0.75</td>
-<td style="text-align: right;">0.45</td>
-<td style="text-align: right;">0.1804</td>
+<td style="text-align: left;">model_name</td>
+<td style="text-align: left;">Non-Linear Kernal SVM</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">nr.support_vectors</td>
+<td style="text-align: left;">7421</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">best_cost</td>
+<td style="text-align: left;">0.75</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">best_gamma</td>
+<td style="text-align: left;">0.45</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">best_cross_validation_error</td>
+<td style="text-align: left;">0.18</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">best_training_accuracy</td>
+<td style="text-align: left;">0.85</td>
 </tr>
 </tbody>
 </table>
-</div>
+<p>Linear Kernal SVM CV Error vs Cost</p>
 </div>
 
-<img data-src="tune_summ.png" width="498" class="r-stretch quarto-figure-center"><p class="caption">Non-linear SVM Tuning Summary</p><p>Across parameter combinations, the model starts to overfit as the gamma parameter increases past 0.50, as well as some higher values of gamma, past its optimal value.</p>
+</div>
+<img data-src="AirBnB_actual_presentation_files/figure-revealjs/nl_svm-1.png" style="width:80.0%" class="r-stretch quarto-figure-center"><p class="caption">Linear Kernal SVM CV Error vs Cost</p><p>Across parameter combinations, the model starts to overfit as the gamma parameter increases past 0.50, as well as some higher values of gamma, past its optimal value.</p>
 
 </section></section>
     </div>
@@ -402,7 +453,7 @@ Pamela Afful
         backgroundTransition: 'none',
 
         // Number of slides away from the current that are visible
-        viewDistance: 10,
+        viewDistance: 2,
 
         // Number of slides away from the current that are visible on mobile
         // devices. It is advisable to set this to a lower number than
@@ -412,12 +463,17 @@ Pamela Afful
         // The "normal" size of the presentation, aspect ratio will be preserved
         // when the presentation is scaled to fit different resolutions. Can be
         // specified using percentage units.
-        width: 1050,
+        width: 1280,
 
-        height: 700,
+        height: 720,
 
         // Factor of the display size that should remain empty around the content
-        margin: 0.1,
+        margin: 5.0e-2,
+
+        // Bounds for smallest/largest possible scale to apply to content
+        minScale: 0.2,
+
+        maxScale: 1,
 
         math: {
           mathjax: 'https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js',
