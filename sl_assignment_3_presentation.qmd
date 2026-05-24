@@ -277,25 +277,36 @@ library(foreach)
 
 # Use grid search to fid the optimal Cost Parameter C
 
-#n_cores <- parallel::detectCores() - 1  # leave one core free
-# cl <- makeCluster(n_cores)
-# clusterEvalQ(cl, library(e1071))
-# registerDoParallel(cl)
-# 
-# tune.control()
-# nl_svm_model <- tune.svm( fully_booked_30~., data=
-# listings_data_cleaned_features,kernel='radial',
-# cost=seq(0.15, 3, by = 0.15),type='C-classification',
-# tunecontrol = tune.control(cross = 10) # k=10 cross validation
-# )
-# stopCluster(cl)
-# registerDoSEQ()
-# # save model 
-# 
-# saveRDS(nl_svm_model, "nl_svm_model.rds")
+n_cores <- parallel::detectCores() - 1  # leave one core free
+cl <- makeCluster(n_cores)
+clusterEvalQ(cl, library(e1071))
+registerDoParallel(cl)
+
+tune.control()
+nl_svm_model <- tune.svm( fully_booked_30~., data=
+listings_data_cleaned_features,kernel='radial',
+cost=seq(0.15, 3, by = 0.15),
+gamma = c(seq(0.05,1,0.20),1),
+type='C-classification',
+tunecontrol = tune.control(cross = 10) # k=10 cross validation
+)
+stopCluster(cl)
+registerDoSEQ()
+# save model
+
+saveRDS(nl_svm_model, "nl_svm_model.rds")
 nl_svm_model=readRDS("nl_svm_model.rds")
 nl_svm_model$best.model
 
+```
+
+```{r}
+
+nl_svm_best_mod_param=kable(data.frame(
+  best_cost = nl_svm_model$best.parameters$cost,
+  best_gamma = nl_svm_model$best.parameters$gamma,
+  best_cross_validation_error = nl_svm_model$best.performance
+))
 ```
 
 ```{r nn_fit, eval=T, echo=F}
@@ -332,7 +343,7 @@ listings_h2o_train <- as.h2o(train_scaled)
 
 ```
 
-Apply regularisation to hedge against over fitting
+Apply regularization to hedge against over fitting
 
 ```{r,nn_gridsearch,eval=T,echo=F}
 hidden_options <- list(c(5), c(10), c(15), c(15,10,5))
@@ -348,7 +359,7 @@ n_cores <- parallel::detectCores() - 1  # leave one core free
 cl <- makeCluster(n_cores)
 clusterEvalQ(cl, library(h2o))
 registerDoParallel(cl)
-
+# 
 listings_grid <- h2o.grid(
   algorithm = "deeplearning",
   grid_id = "listings_nn_grid",
@@ -363,19 +374,23 @@ listings_grid <- h2o.grid(
   activation = "Tanh",
   seed = 1,
   reproducible = TRUE,
+  balance_classes=T, # again for imabalnced data
   fold_assignment = "Stratified", # for balanced validation/train sets since data is imbalanced
   nfolds = 10
 )
 
-
-
+h2o.saveGrid(grid_directory = "C:/Users/Admin/OneDrive/Desktop/UCT_Masters_Coursework/Supervised Learning/SL_Assignment_3", 
+ 
+             grid_id = "listings_nn_grid")
 
 stopCluster(cl)
 registerDoSEQ()
 
 #saveRDS(listings_grid, "nn_listings_grid.rds")
-nn_model=readRDS("nn_listings_grid.rds")
+#nn_model=readRDS("nn_listings_grid.rds")
 
+
+nn_model=h2o.loadGrid(grid_path="listings_nn_grid")
 
 grid_results=h2o.getGrid(
   grid_id = "listings_nn_grid",
@@ -394,7 +409,7 @@ library(ggplot2)
 library(plotly)
 best_model=grid_results@model_ids[[1]]
 
-sort(unique(grid_metrics$l1))
+
 
 # Get model results
 grid_metrics=data.frame(grid_results@summary_table)
@@ -416,8 +431,24 @@ ggplotly(fig)
 
 ```{r, nn_best_model, echo=F, eval=TRUE}
 
+
 best_model=h2o.getModel(grid_results@model_ids[[1]])
 
 best_model_perf=h2o.performance(model = best_model)
 best_model_perf
+```
+
+```{r, best_mod_par, echo=F, eval=T}
+
+best_model=h2o.getModel(model_id = grid_results@model_ids[[1]])
+
+report_model_parameters <- function(model, model_grid) {
+  best_hyperparameters <- model_grid@summary_table[1,]
+  best_model_summary <- model@model$model_summary
+  out <- c(
+    best_hyperparameters,
+    best_model_summary
+  )
+  return(out)
+}
 ```

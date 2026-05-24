@@ -10,7 +10,7 @@
   <meta name="generator" content="quarto-1.8.25">
 
   <meta name="author" content="Pamela Afful">
-  <title>Airbnb Bookings Analysis</title>
+  <title>Airbnb Bookings Predictions</title>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
@@ -127,7 +127,7 @@
     <div class="slides">
 
 <section id="title-slide" class="quarto-title-block center">
-  <h1 class="title">Airbnb Bookings Analysis</h1>
+  <h1 class="title">Airbnb Bookings Predictions</h1>
   <p class="subtitle">SVM and Nueral Network Model Performance Analysis</p>
 
 <div class="quarto-title-authors">
@@ -146,6 +146,10 @@ Pamela Afful
 <li><a href="#/exploratory-analysis" id="/toc-exploratory-analysis">Exploratory Analysis</a>
 <ul>
 <li><a href="#/feature-distributions" id="/toc-feature-distributions">Feature Distributions</a></li>
+</ul></li>
+<li><a href="#/model-training" id="/toc-model-training">Model Training</a>
+<ul>
+<li><a href="#/linear-kernel-svm" id="/toc-linear-kernel-svm">Linear Kernel SVM</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -189,8 +193,41 @@ Pamela Afful
 <section id="feature-distributions" class="slide level2">
 <h2>Feature Distributions</h2>
 
-
 <img data-src="AirBnB_actual_presentation_files/figure-revealjs/eda_plots-1.png" width="1440" class="r-stretch"></section></section>
+<section>
+<section id="model-training" class="title-slide slide level1 center">
+<h1>Model Training</h1>
+
+</section>
+<section id="linear-kernel-svm" class="slide level2">
+<h2>Linear Kernel SVM</h2>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>   cost  error  dispersion
+1  0.15 0.1834 0.008016649
+2  0.30 0.1834 0.008016649
+3  0.45 0.1834 0.008016649
+4  0.60 0.1834 0.008016649
+5  0.75 0.1834 0.008016649
+6  0.90 0.1834 0.008016649
+7  1.05 0.1835 0.008195527
+8  1.20 0.1835 0.008195527
+9  1.35 0.1835 0.008195527
+10 1.50 0.1835 0.008195527
+11 1.65 0.1835 0.008195527
+12 1.80 0.1835 0.008195527
+13 1.95 0.1835 0.008195527
+14 2.10 0.1835 0.008195527
+15 2.25 0.1835 0.008195527
+16 2.40 0.1835 0.008195527
+17 2.55 0.1835 0.008195527
+18 2.70 0.1835 0.008195527
+19 2.85 0.1835 0.008195527
+20 3.00 0.1835 0.008195527</code></pre>
+</div>
+</div>
+
+</section></section>
     </div>
   <div class="quarto-auto-generated-content" style="display: none;">
 <div class="footer footer-default">
@@ -378,6 +415,11 @@ Pamela Afful
 
         // Factor of the display size that should remain empty around the content
         margin: 0.1,
+
+        // Bounds for smallest/largest possible scale to apply to content
+        minScale: 0.2,
+
+        maxScale: 2,
 
         math: {
           mathjax: 'https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js',

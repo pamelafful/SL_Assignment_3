@@ -1,5 +1,5 @@
 ---
-title: "Airbnb Bookings Analysis"
+title: "Airbnb Bookings Predictions"
 subtitle: "SVM and Nueral Network Model Performance Analysis"
 author: "Pamela Afful"
 format:
@@ -9,6 +9,8 @@ format:
     transition: slide
     toc: true
     code-fold: false
+    min-scale: 0.2
+    max-scale: 2.0
 execute:
   echo: true
   warning: false
