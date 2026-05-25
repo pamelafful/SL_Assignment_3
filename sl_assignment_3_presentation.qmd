@@ -50,6 +50,7 @@ library(yardstick)
 library(ROCR)
 library(readr)
 library(e1071)
+library(stringr)
 ```
 
 ```{r data_read, eval=T, echo=F}
@@ -366,18 +367,78 @@ options("h2o.use.data.table" = FALSE)
 
 ```{r,scale_train_test_split, echo=F, eval=T}
 
-# scale features
+library(caret)
 
-x=data.matrix(subset(listings_data_cleaned_features, select=-fully_booked_30));
-train_scaled=data.frame(scale(x, center = TRUE, scale = TRUE))
+# Create a train and validation set for nn
+# listings_data_cleaned_features=subset(listings_data_cleaned_features,select=-predictions)
+y=listings_data_cleaned_features$fully_booked_30
 
 
-train_scaled$fully_booked_30=listings_data_cleaned_features$fully_booked_30
+is.numeric(listings_data_cleaned_features$minimum_nights)
+inds=createDataPartition(
+  y,
+  times = 1,
+  p = 0.8,
+  list = TRUE,
+  groups = min(5, length(y))
+)[['Resample1']]
 
-names(subset(train_scaled,select=-fully_booked_30))
+
+train_subset=listings_data_cleaned_features[inds,]
+validation_df=listings_data_cleaned_features[-inds,]
+
+str(train_subset)
+
+#scale the sets
+num_cols <- sapply(train_subset, is.numeric)
+non_num=names(num_cols[num_cols!=T]);
+
+tr_center <- vapply(train_subset[num_cols],
+                      mean,
+                      numeric(1))
+
+tr_scale <- vapply(train_subset[num_cols],
+                     sd,
+                     numeric(1))
+
+
+# apply scaling
+
+train_scaled=data.frame(
+  scale(data.matrix(train_subset[num_cols]),center=tr_center,scale=tr_scale)
+)
+
+
+# add the rest of the factor features
+
+train_scaled=cbind(train_scaled,train_subset[,non_num])
+
+
+# x=data.matrix(subset(listings_data_cleaned_features, select=-fully_booked_30));
+
+
+#train_scaled=data.frame(scale(x, center = TRUE, scale = TRUE))
+
+
+# scale the validation as well
+validation_scaled=data.frame(
+  scale(data.matrix(validation_df[num_cols]),center=tr_center,scale=tr_scale)
+)
+
+validation_scaled=cbind(validation_scaled,validation_df[non_num])
+
+
+
+
+
+
+# train_scaled$fully_booked_30=listings_data_cleaned_features$fully_booked_30
+# 
+# names(subset(train_scaled,select=-fully_booked_30))
 
 
 listings_h2o_train <- as.h2o(train_scaled)
+listings_h2o_validation <- as.h2o(train_scaled)
 
 ```
 
@@ -397,7 +458,7 @@ n_cores <- parallel::detectCores() - 1  # leave one core free
 cl <- makeCluster(n_cores)
 clusterEvalQ(cl, library(h2o))
 registerDoParallel(cl)
-# 
+#
 listings_grid <- h2o.grid(
   algorithm = "deeplearning",
   grid_id = "listings_nn_grid",
@@ -409,23 +470,26 @@ listings_grid <- h2o.grid(
   x = feature_names,
   y = target,
   training_frame = listings_h2o_train,
+  validation_frame =listings_h2o_validation,
   activation = "Tanh",
   seed = 1,
   reproducible = TRUE,
   balance_classes=T, # again for imabalnced data
   fold_assignment = "Stratified", # for balanced validation/train sets since data is imbalanced
-  nfolds = 10
+  nfolds = 10,
+  variable_importances = TRUE,
+  export_weights_and_biases = TRUE
 )
 
-h2o.saveGrid(grid_directory = "C:/Users/Admin/OneDrive/Desktop/UCT_Masters_Coursework/Supervised Learning/SL_Assignment_3", 
- 
+h2o.saveGrid(grid_directory = "SL_Assignment_3",
+
              grid_id = "listings_nn_grid")
 
 stopCluster(cl)
 registerDoSEQ()
 
-#saveRDS(listings_grid, "nn_listings_grid.rds")
-#nn_model=readRDS("nn_listings_grid.rds")
+saveRDS(listings_grid, "nn_listings_grid.rds")
+nn_model=readRDS("nn_listings_grid.rds")
 
 
 nn_model=h2o.loadGrid(grid_path="listings_nn_grid")
@@ -441,6 +505,43 @@ grid_results=h2o.getGrid(
 
 ```
 
+```{r}
+nn_model=h2o.loadGrid(grid_path="listings_nn_grid")
+
+grid_results=h2o.getGrid(
+  grid_id = "listings_nn_grid",
+  sort_by = "logloss", # USE as choosing metrics
+  decreasing = FALSE # We want the smallest logloss at the top
+)
+
+
+parameter_comb=h2o.getGrid(
+  grid_id = "listings_nn_grid",
+  sort_by = "logloss",
+  decreasing = FALSE
+)@summary_table
+
+
+a=parameter_comb%>% 
+  mutate(model_id=as.numeric(str_sub(model_ids, -2,-1))) %>% 
+  group_by(hidden, l1) %>% 
+  summarize(mean_ll=mean(logloss))  %>% 
+  mutate(l1=factor(l1, levels= sort(unique(parameter_comb$l1))),
+                            hidden=factor(hidden, levels= c('5','10','15',"[15, 10, 5]") )
+                            ) %>% 
+ ggplot(aes(x=l1,y=mean_ll,group=1,color=hidden)) +
+  geom_line()+
+  #facet_wrap(.~hidden,scales='free_y',labeller =label_both)+
+  #coord_cartesian(ylim = c(0.443, 0.4577))+
+  labs(title='NN Gridsearch Summary',x='L1',y='Mean CV Log Loss',color='no. hidden layers')+
+  theme_minimal()
+  
+  
+#ggplotly(a)
+```
+
+![NN Grid Search Summary](tune_summ.png){width="703" height="372"}
+
 ```{r,nn_best,eval=TRUE,echo=F}
 
 library(ggplot2)
@@ -448,23 +549,24 @@ library(plotly)
 best_model=grid_results@model_ids[[1]]
 
 
+# Get best model statistics
 
-# Get model results
-grid_metrics=data.frame(grid_results@summary_table)
-fig=grid_metrics %>% mutate(l1=factor(l1, levels= sort(unique(grid_metrics$l1))),
-                            hidden=factor(hidden, levels= c('5','10','15',"[15, 10, 5]") )
-                            ) %>% 
-  group_by(hidden,l1) %>% 
-  summarize(cv_logloss=mean(logloss)) %>% 
-  ggplot(aes(x=l1,y=cv_logloss)) +
-  #geom_line()+
-  geom_bar(fill='steelblue',stat = "identity", position = "dodge")+
-  
-  facet_wrap(.~hidden,scales='free_y',labeller =label_both)+
-  #coord_cartesian(ylim = c(0.443, 0.4577))+
-  labs(title='NN Gridsearch Summary',x='epochs',y='CV Log Loss')+
-  theme_minimal()
-ggplotly(fig)
+# # Get model results
+# grid_metrics=data.frame(grid_results@summary_table)
+# fig=grid_metrics %>% mutate(l1=factor(l1, levels= sort(unique(grid_metrics$l1))),
+#                             hidden=factor(hidden, levels= c('5','10','15',"[15, 10, 5]") )
+#                             ) %>% 
+#   group_by(hidden,l1) %>% 
+#   summarize(cv_logloss=mean(logloss)) %>% 
+#   ggplot(aes(x=l1,y=cv_logloss)) +
+#   #geom_line()+
+#   geom_bar(fill='steelblue',stat = "identity", position = "dodge")+
+#   
+#   facet_wrap(.~hidden,scales='free_y',labeller =label_both)+
+#   #coord_cartesian(ylim = c(0.443, 0.4577))+
+#   labs(title='NN Gridsearch Summary',x='epochs',y='CV Log Loss')+
+#   theme_minimal()
+# ggplotly(fig)
 ```
 
 ```{r, nn_best_model, echo=F, eval=TRUE}
@@ -473,7 +575,19 @@ ggplotly(fig)
 best_model=h2o.getModel(grid_results@model_ids[[1]])
 
 best_model_perf=h2o.performance(model = best_model)
-best_model_perf
+#best_model_perf
+
+
+
+h2o.performance(best_model, train = TRUE)
+h2o.performance(best_model, valid = TRUE)
+h2o.logloss(best_model, train = TRUE)
+h2o.logloss(best_model, valid = TRUE)
+
+
+#Get prediction on validation
+valid_pred=h2o.predict(best_model,listings_h2o_validation)
+
 ```
 
 ```{r, best_mod_par, echo=F, eval=T}
@@ -489,4 +603,8 @@ report_model_parameters <- function(model, model_grid) {
   )
   return(out)
 }
+
+report_model_parameters(best_model,grid_results)
 ```
+
+# Cross-Model Comparison

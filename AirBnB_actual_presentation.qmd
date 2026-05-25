@@ -395,7 +395,8 @@ kable(summ_table)
 
 # Model Training Linear Kernel SVM 
 
-**Gridsearch Training Summary**
+**Gridsearch Training Summary\
+**Across parameter combinations, the model starts to overfit as the gamma parameter increases past 0.50, as well as some higher values of gamma, past its optimal value.
 
 ```{r nl_svm_summ, eval=T, echo=FALSE}
 #| message: false
@@ -429,8 +430,6 @@ svm_nl_grid_per %>% group_by(gamma,cost) %>%
   
 ```
 
-Across parameter combinations, the model starts to overfit as the gamma parameter increases past 0.50, as well as some higher values of gamma, past its optimal value.
-
 # Model Training
 
 ## Feed Forward Neural Network
@@ -448,8 +447,8 @@ local_h2o <- h2o.init()
 #| message: false
 #| warning: false
 #| fig-cap: NN Grisearch Average Log Loss Grouped by Nr Hidden Layers and L1
-#| fig-height: 6
-#| fig-width: 6
+#| fig-height: 5
+#| fig-width: 8
 
 
 
