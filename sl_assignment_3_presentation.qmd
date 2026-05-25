@@ -370,7 +370,6 @@ options("h2o.use.data.table" = FALSE)
 library(caret)
 
 # Create a train and validation set for nn
-# listings_data_cleaned_features=subset(listings_data_cleaned_features,select=-predictions)
 y=listings_data_cleaned_features$fully_booked_30
 
 
@@ -409,15 +408,9 @@ train_scaled=data.frame(
 )
 
 
-# add the rest of the factor features
 
 train_scaled=cbind(train_scaled,train_subset[,non_num])
 
-
-# x=data.matrix(subset(listings_data_cleaned_features, select=-fully_booked_30));
-
-
-#train_scaled=data.frame(scale(x, center = TRUE, scale = TRUE))
 
 
 # scale the validation as well
@@ -425,21 +418,14 @@ validation_scaled=data.frame(
   scale(data.matrix(validation_df[num_cols]),center=tr_center,scale=tr_scale)
 )
 
-validation_scaled=cbind(validation_scaled,validation_df[non_num])
+validation_scaled_final=cbind(validation_scaled,validation_df[non_num])
 
 
-
-
-
-
-# train_scaled$fully_booked_30=listings_data_cleaned_features$fully_booked_30
-# 
-# names(subset(train_scaled,select=-fully_booked_30))
 
 
 listings_h2o_train <- as.h2o(train_scaled)
-listings_h2o_validation <- as.h2o(train_scaled)
-
+listings_h2o_validation <- as.h2o(validation_scaled_final)
+listings_h2o_validation
 ```
 
 Apply regularization to hedge against over fitting
@@ -458,7 +444,7 @@ n_cores <- parallel::detectCores() - 1  # leave one core free
 cl <- makeCluster(n_cores)
 clusterEvalQ(cl, library(h2o))
 registerDoParallel(cl)
-#
+
 listings_grid <- h2o.grid(
   algorithm = "deeplearning",
   grid_id = "listings_nn_grid",
@@ -470,7 +456,6 @@ listings_grid <- h2o.grid(
   x = feature_names,
   y = target,
   training_frame = listings_h2o_train,
-  validation_frame =listings_h2o_validation,
   activation = "Tanh",
   seed = 1,
   reproducible = TRUE,
@@ -501,8 +486,6 @@ grid_results=h2o.getGrid(
 )
 
 
-
-
 ```
 
 ```{r}
@@ -523,7 +506,6 @@ parameter_comb=h2o.getGrid(
 
 
 a=parameter_comb%>% 
-  mutate(model_id=as.numeric(str_sub(model_ids, -2,-1))) %>% 
   group_by(hidden, l1) %>% 
   summarize(mean_ll=mean(logloss))  %>% 
   mutate(l1=factor(l1, levels= sort(unique(parameter_comb$l1))),
@@ -537,10 +519,10 @@ a=parameter_comb%>%
   theme_minimal()
   
   
-#ggplotly(a)
+ggplotly(a)
 ```
 
-![NN Grid Search Summary](tune_summ.png){width="703" height="372"}
+)
 
 ```{r,nn_best,eval=TRUE,echo=F}
 
@@ -587,12 +569,52 @@ h2o.logloss(best_model, valid = TRUE)
 
 #Get prediction on validation
 valid_pred=h2o.predict(best_model,listings_h2o_validation)
+h2o.describe(listings_h2o_validation)
+h2o.describe(listings_h2o_train)
+valid_pred
 
+```
+
+```{r}
+best_model=h2o.getModel(model_id = grid_results@model_ids[[1]])
+# performance on new data
+perf <- h2o.performance(best_model,xval=T) #Get CV metrics
+best_l1=best_model@parameters[['l1']]
+best_hidden=best_model@parameters[['hidden']]
+
+# Get performance metrics, traning
+gini=h2o.giniCoef(perf)
+f1=h2o.F1(perf) # get max F1 
+max_f1=max(f1$f1, na.rm = T)
+accuracy=h2o.accuracy(perf)
+max_acc=max(accuracy$accuracy, na.rm = T)
+max_acc_ts=accuracy %>% filter(accuracy==max_acc) %>% pull(threshold)
+log_loss=h2o.logloss(perf)
+
+# Best Model CV Metrics
+summ_table <- tibble(
+  Metric = c(
+    "best L1",
+    "best nr. hidden layer nodes",
+    "best CV Accuracy",
+    "best CV Logloss"
+  ),
+  Value = c(
+    best_l1,
+    best_hidden,
+    round(max_acc, 2),
+    round(log_loss, 2)
+  )
+)
+
+kable(summ_table, caption = 'Neural Net Best Model Metrics')
 ```
 
 ```{r, best_mod_par, echo=F, eval=T}
 
 best_model=h2o.getModel(model_id = grid_results@model_ids[[1]])
+
+
 
 report_model_parameters <- function(model, model_grid) {
   best_hyperparameters <- model_grid@summary_table[1,]
@@ -605,6 +627,10 @@ report_model_parameters <- function(model, model_grid) {
 }
 
 report_model_parameters(best_model,grid_results)
+```
+
+```{r}
+h2o.shutdown() 
 ```
 
 # Cross-Model Comparison

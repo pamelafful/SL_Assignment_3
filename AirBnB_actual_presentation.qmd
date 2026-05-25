@@ -4,7 +4,7 @@ subtitle: "SVM and Neural Network Model Performance Analysis"
 author: "Pamela Afful"
 format:
   beamer:
-    theme: metropolis       # Common, clean Beamer theme
+    theme: Madrid       # Common, clean Beamer theme
     colortheme: default
     fonttheme: professionalfonts
     slide-number: true
@@ -393,7 +393,7 @@ kable(summ_table)
 
 ```
 
-# Model Training Linear Kernel SVM 
+# Model Training Linear Kernel SVM
 
 **Gridsearch Training Summary\
 **Across parameter combinations, the model starts to overfit as the gamma parameter increases past 0.50, as well as some higher values of gamma, past its optimal value.
@@ -414,7 +414,7 @@ best_gamm=nl_svm_model$best.parameters$gamma
 a=paste("best cost:",best_cost)
 b=paste("best gamma:",best_gamm)
 
-svm_nl_grid_per %>% group_by(gamma,cost) %>% 
+nl_gr=svm_nl_grid_per %>% group_by(gamma,cost) %>% 
   summarize(cv_error=mean(error)) %>% 
   mutate(cost=factor(cost,levels=  sort(unique(svm_nl_grid_per$cost)))) %>% 
   ggplot(aes(x=gamma,y=cv_error,color=cost)) +
@@ -430,9 +430,11 @@ svm_nl_grid_per %>% group_by(gamma,cost) %>%
   
 ```
 
-# Model Training
+![Non-linear Kernel SVM CV Error Per Grid Hyperparameter](nl_grid_summ.png){width="387" height="213"}
 
-## Feed Forward Neural Network
+# Model Training Feed Forward Neural Network
+
+**Gridsearch Tuning Summary**
 
 ```{r,h20_init, echo=F,eval=TRUE}
 #| include: false
@@ -447,10 +449,8 @@ local_h2o <- h2o.init()
 #| message: false
 #| warning: false
 #| fig-cap: NN Grisearch Average Log Loss Grouped by Nr Hidden Layers and L1
-#| fig-height: 5
+#| fig-height: 4.5
 #| fig-width: 8
-
-
 
 
 nn_model=h2o.loadGrid(grid_path="listings_nn_grid")
@@ -484,9 +484,57 @@ a=parameter_comb%>%
   theme_minimal()
   
  
-ggplotly(a)
+#ggplotly(a)
+```
+
+![Mean CV logloss per grid hyperparameter](nn_tune_summ.png){width="336" height="186"}
+
+# Model Training Feed Forward Neural Network
+
+**Best Model Summary**
+
+```{r nn_best_modl, eval=T, echo=FALSE}
+#| message: false
+#| warning: false
+#| fig-height: 3
+#| fig-width: 3
+#| paged-print: false
+best_model=h2o.getModel(model_id = grid_results@model_ids[[1]])
+# performance on new data
+perf <- h2o.performance(best_model,xval=T) #Get CV metrics
+best_l1=best_model@parameters[['l1']]
+best_hidden=best_model@parameters[['hidden']]
+
+# Get performance metrics, traning
+gini=h2o.giniCoef(perf)
+f1=h2o.F1(perf) # get max F1 
+max_f1=max(f1$f1, na.rm = T)
+accuracy=h2o.accuracy(perf)
+max_acc=max(accuracy$accuracy, na.rm = T)
+max_acc_ts=accuracy %>% filter(accuracy==max_acc) %>% pull(threshold)
+log_loss=h2o.logloss(perf)
+
+# Best Model CV Metrics
+summ_table <- tibble(
+  Metric = c(
+    "best L1",
+    "best nr. hidden layer nodes",
+    "best CV Accuracy",
+    "best CV Logloss"
+  ),
+  Value = c(
+    best_l1,
+    best_hidden,
+    round(max_acc, 2),
+    round(log_loss, 2)
+  )
+)
+
+kable(summ_table, caption = 'Neural Net Best Model Metrics')
 ```
 
 ```{r,echo=FALSE,eval=TRUE}
-h2o.shutdown() 
+#h2o.shutdown() 
 ```
+
+# Next: cross model comparison and summary 
