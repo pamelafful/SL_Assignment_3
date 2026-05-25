@@ -1,20 +1,15 @@
 ---
 title: "Airbnb Bookings Predictions"
-subtitle: "SVM and Nueral Network Model Performance Analysis"
+subtitle: "SVM and Neural Network Model Performance Analysis"
 author: "Pamela Afful"
 format:
-  revealjs:
-    theme: simple
+  beamer:
+    theme: metropolis       # Common, clean Beamer theme
+    colortheme: default
+    fonttheme: professionalfonts
     slide-number: true
-    transition: slide
+    latex-min-runs: 2
     toc: true
-    code-fold: false
-    view-distance: 2
-    width: 1280
-    height: 720
-    margin: 0.05
-    min-scale: 0.2
-    max-scale: 1.0
 execute:
   echo: true
   warning: false
@@ -187,7 +182,7 @@ listings_data_cleaned %>%
   theme_minimal() #1
 ```
 
-## Feature Distributions
+# Feature Distributions
 
 some text here
 
@@ -266,7 +261,9 @@ print( (plot_list[["price"]]+plot_list[["minimum_nights"]]+plot_list[["review_sc
        
 ```
 
-# Linear Kernel SVM
+# Model Training
+
+## Linear Kernel SVM
 
 some text here
 
@@ -313,7 +310,7 @@ kable(summ_table, caption = 'Linear Kernal SVM Best Model Summary')
 #| message: false
 #| warning: false
 #| fig-height: 5
-#| fig-width: 6
+#| fig-width: 5
 #| out-width: 80%
 #| fig-cap: Linear Kernal SVM CV Error vs Cost
 
@@ -325,6 +322,8 @@ liner_svm_model$performances %>%
   labs(title='Liner Kervel SVM CV Error vs Cost', y='CV Error')+
   theme_minimal()
 ```
+
+# Model Training
 
 ## Non-Linear SVM Tuning Summary
 
@@ -358,26 +357,16 @@ training_correct_classification_rate=sum(listings_data_cleaned_features$predicti
 ```{r nl_svm, eval=T, echo=FALSE}
 #| message: false
 #| warning: false
-#| fig-height: 6
+#| fig-cap: Non Linear Kernal SVM CV Error vs Cost
+#| fig-height: 5
+#| fig-width: 5
 #| out-width: 80%
-#| fig-cap: Linear Kernal SVM CV Error vs Cost
 
 
 nl_svm_model=readRDS("nl_svm_model.rds")
-# kable(data.frame(
-#   model_name='Non-Linear Kernal SVM',
-#   nr.support_vectors=length(nl_svm_model$best.model$index),
-#   best_cost = nl_svm_model$best.parameters$cost,
-#   best_gamma = nl_svm_model$best.parameters$gamma,
-#   best_cross_validation_error = round(nl_svm_model$best.performance,2),
-#   best_training_accuracy=round(training_correct_classification_rate,2)
-# ))
-
-
 
 summ_table <- tibble(
   Metric = c(
-    "model_name",
     "nr.support_vectors",
     "best_cost",
     "best_gamma",
@@ -385,7 +374,6 @@ summ_table <- tibble(
     "best_training_accuracy"
   ),
   Value = c(
-    "Non-Linear Kernal SVM",
     length(nl_svm_model$best.model$index),
     nl_svm_model$best.parameters$cost,
     nl_svm_model$best.parameters$gamma,
@@ -397,32 +385,109 @@ summ_table <- tibble(
 kable(summ_table)
 
 
+
+
+
+
+
+
+```
+
+# Model Training Linear Kernel SVM 
+
+**Gridsearch Training Summary**
+
+```{r nl_svm_summ, eval=T, echo=FALSE}
+#| message: false
+#| warning: false
+#| fig-height: 5.5
+#| fig-width: 8
+
 svm_nl_grid_per=nl_svm_model$performances
 min_err=min(svm_nl_grid_per$error)
 max_err=max(svm_nl_grid_per$error)
 best_cost=nl_svm_model$best.parameters$cost
 best_gamm=nl_svm_model$best.parameters$gamma
 
-a=paste("best cost:",best_cost)#
+
+a=paste("best cost:",best_cost)
 b=paste("best gamma:",best_gamm)
-
-
 
 svm_nl_grid_per %>% group_by(gamma,cost) %>% 
   summarize(cv_error=mean(error)) %>% 
   mutate(cost=factor(cost,levels=  sort(unique(svm_nl_grid_per$cost)))) %>% 
   ggplot(aes(x=gamma,y=cv_error,color=cost)) +
   geom_line()+
-  #facet_wrap(.~gamma,scales='free_y',labeller =label_both)+
   labs(title='Non Linear SVM Tuning Summary',x='gamma',y='CV Misclass Error')+
    geom_hline(yintercept = min_err, 
                color = "lightblue", 
                linetype = "dashed", 
                linewidth = 1.1)+
-  annotate("text", x = 0.75, y = min_err, label = paste(a,',',b), color = "blue")+
+  annotate("text", x = 0.75, y = min_err, label = paste(a,',',b), color = "blue",size = 4)+
  
   theme_minimal()
   
 ```
 
 Across parameter combinations, the model starts to overfit as the gamma parameter increases past 0.50, as well as some higher values of gamma, past its optimal value.
+
+# Model Training
+
+## Feed Forward Neural Network
+
+```{r,h20_init, echo=F,eval=TRUE}
+#| include: false
+Sys.setenv(JAVA_HOME="C:/Program Files/Java/jdk-26.0.1")
+
+library(h2o)
+library(caret)
+local_h2o <- h2o.init()
+```
+
+```{r nn, eval=T, echo=F}
+#| message: false
+#| warning: false
+#| fig-cap: NN Grisearch Average Log Loss Grouped by Nr Hidden Layers and L1
+#| fig-height: 6
+#| fig-width: 6
+
+
+
+
+nn_model=h2o.loadGrid(grid_path="listings_nn_grid")
+
+grid_results=h2o.getGrid(
+  grid_id = "listings_nn_grid",
+  sort_by = "logloss", # USE as choosing metrics
+  decreasing = FALSE # We want the smallest logloss at the top
+)
+
+
+parameter_comb=h2o.getGrid(
+  grid_id = "listings_nn_grid",
+  sort_by = "logloss",
+  decreasing = FALSE
+)@summary_table
+
+
+a=parameter_comb%>% 
+  mutate(model_id=as.numeric(str_sub(model_ids, -2,-1))) %>% 
+  group_by(hidden, l1) %>% 
+  summarize(mean_ll=mean(logloss))  %>% 
+  mutate(l1=factor(l1, levels= sort(unique(parameter_comb$l1))),
+                            hidden=factor(hidden, levels= c('5','10','15',"[15, 10, 5]") )
+                            ) %>% 
+ ggplot(aes(x=l1,y=mean_ll,group=1,color=hidden)) +
+  geom_line()+
+  #facet_wrap(.~hidden,scales='free_y',labeller =label_both)+
+  #coord_cartesian(ylim = c(0.443, 0.4577))+
+  labs(title='NN Gridsearch Summary',x='L1',y='Mean CV Log Loss',color='no. hidden layers')+
+  theme_minimal()
+  
+ 
+ggplotly(a)
+```
+
+```{r,echo=FALSE,eval=TRUE}
+h2o.shutdown() 
+```
