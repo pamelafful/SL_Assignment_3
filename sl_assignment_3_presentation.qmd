@@ -373,22 +373,22 @@ library(caret)
 y=listings_data_cleaned_features$fully_booked_30
 
 
-is.numeric(listings_data_cleaned_features$minimum_nights)
-inds=createDataPartition(
-  y,
-  times = 1,
-  p = 0.8,
-  list = TRUE,
-  groups = min(5, length(y))
-)[['Resample1']]
+#is.numeric(listings_data_cleaned_features$minimum_nights)
+# inds=createDataPartition(
+#   y,
+#   times = 1,
+#   p = 0.8,
+#   list = TRUE,
+#   groups = min(5, length(y))
+# )[['Resample1']]
 
 
-train_subset=listings_data_cleaned_features[inds,]
-validation_df=listings_data_cleaned_features[-inds,]
-
-str(train_subset)
-
-#scale the sets
+train_subset=listings_data_cleaned_features
+# validation_df=listings_data_cleaned_features[-inds,]
+# 
+# str(train_subset)
+# 
+# #scale the sets
 num_cols <- sapply(train_subset, is.numeric)
 non_num=names(num_cols[num_cols!=T]);
 
@@ -410,28 +410,29 @@ train_scaled=data.frame(
 
 
 train_scaled=cbind(train_scaled,train_subset[,non_num])
-
+train_scaled$fully_booked_30=factor(ifelse(train_scaled$fully_booked_30=='no','yes','no'),levels=c('no','yes'))
 
 
 # scale the validation as well
-validation_scaled=data.frame(
-  scale(data.matrix(validation_df[num_cols]),center=tr_center,scale=tr_scale)
-)
+# validation_scaled=data.frame(
+#   scale(data.matrix(validation_df[num_cols]),center=tr_center,scale=tr_scale)
+# )
 
-validation_scaled_final=cbind(validation_scaled,validation_df[non_num])
+#validation_scaled_final=cbind(validation_scaled,validation_df[non_num])
 
 
 
 
 listings_h2o_train <- as.h2o(train_scaled)
-listings_h2o_validation <- as.h2o(validation_scaled_final)
-listings_h2o_validation
+#listings_h2o_validation <- as.h2o(validation_scaled_final)
+levels(train_scaled$fully_booked_30)
+
 ```
 
 Apply regularization to hedge against over fitting
 
 ```{r,nn_gridsearch,eval=T,echo=F}
-hidden_options <- list(c(5), c(10), c(15), c(15,10,5))
+hidden_options <- list( c(2),c(5), c(10), c(15))
 l1_options <- c(0.05,0.15,0.25) #l1 options
 epochs_options <- c(500, 1000, 1500,2000)
 
@@ -447,7 +448,7 @@ registerDoParallel(cl)
 
 listings_grid <- h2o.grid(
   algorithm = "deeplearning",
-  grid_id = "listings_nn_grid",
+  grid_id = "listings_nn_grid_",
   hyper_params = list(
     hidden = hidden_options,
     l1 = l1_options,
@@ -468,38 +469,38 @@ listings_grid <- h2o.grid(
 
 h2o.saveGrid(grid_directory = "SL_Assignment_3",
 
-             grid_id = "listings_nn_grid")
+             grid_id = "listings_nn_grid_")
 
 stopCluster(cl)
 registerDoSEQ()
 
-saveRDS(listings_grid, "nn_listings_grid.rds")
+saveRDS(listings_grid, "nn_listings_grid_.rds")
 nn_model=readRDS("nn_listings_grid.rds")
 
 
-nn_model=h2o.loadGrid(grid_path="listings_nn_grid")
+nn_model=h2o.loadGrid(grid_path="SL_Assignment_3/listings_nn_grid_")
 
 grid_results=h2o.getGrid(
-  grid_id = "listings_nn_grid",
+  grid_id = "listings_nn_grid_",
   sort_by = "logloss", # USE as choosing metrics
   decreasing = FALSE # We want the smallest logloss at the top
 )
 
-
+grid_results
 ```
 
 ```{r}
-nn_model=h2o.loadGrid(grid_path="listings_nn_grid")
+#nn_model=h2o.loadGrid(grid_path="listings_nn_grid_finl")
 
 grid_results=h2o.getGrid(
-  grid_id = "listings_nn_grid",
+  grid_id = "listings_nn_grid_",
   sort_by = "logloss", # USE as choosing metrics
   decreasing = FALSE # We want the smallest logloss at the top
 )
 
 
 parameter_comb=h2o.getGrid(
-  grid_id = "listings_nn_grid",
+  grid_id = "listings_nn_grid_",
   sort_by = "logloss",
   decreasing = FALSE
 )@summary_table
@@ -509,7 +510,7 @@ a=parameter_comb%>%
   group_by(hidden, l1) %>% 
   summarize(mean_ll=mean(logloss))  %>% 
   mutate(l1=factor(l1, levels= sort(unique(parameter_comb$l1))),
-                            hidden=factor(hidden, levels= c('5','10','15',"[15, 10, 5]") )
+                            hidden=factor(hidden, levels= c('2','5','10','15','[5, 2]',"[15, 10, 5]") )
                             ) %>% 
  ggplot(aes(x=l1,y=mean_ll,group=1,color=hidden)) +
   geom_line()+
@@ -529,50 +530,15 @@ ggplotly(a)
 library(ggplot2)
 library(plotly)
 best_model=grid_results@model_ids[[1]]
+best_model
 
 
-# Get best model statistics
-
-# # Get model results
-# grid_metrics=data.frame(grid_results@summary_table)
-# fig=grid_metrics %>% mutate(l1=factor(l1, levels= sort(unique(grid_metrics$l1))),
-#                             hidden=factor(hidden, levels= c('5','10','15',"[15, 10, 5]") )
-#                             ) %>% 
-#   group_by(hidden,l1) %>% 
-#   summarize(cv_logloss=mean(logloss)) %>% 
-#   ggplot(aes(x=l1,y=cv_logloss)) +
-#   #geom_line()+
-#   geom_bar(fill='steelblue',stat = "identity", position = "dodge")+
-#   
-#   facet_wrap(.~hidden,scales='free_y',labeller =label_both)+
-#   #coord_cartesian(ylim = c(0.443, 0.4577))+
-#   labs(title='NN Gridsearch Summary',x='epochs',y='CV Log Loss')+
-#   theme_minimal()
-# ggplotly(fig)
 ```
 
 ```{r, nn_best_model, echo=F, eval=TRUE}
 
-
-best_model=h2o.getModel(grid_results@model_ids[[1]])
-
-best_model_perf=h2o.performance(model = best_model)
-#best_model_perf
-
-
-
-h2o.performance(best_model, train = TRUE)
-h2o.performance(best_model, valid = TRUE)
-h2o.logloss(best_model, train = TRUE)
-h2o.logloss(best_model, valid = TRUE)
-
-
-#Get prediction on validation
-valid_pred=h2o.predict(best_model,listings_h2o_validation)
-h2o.describe(listings_h2o_validation)
-h2o.describe(listings_h2o_train)
-valid_pred
-
+best_model=h2o.getModel(model_id = grid_results@model_ids[[1]])
+best_model
 ```
 
 ```{r}

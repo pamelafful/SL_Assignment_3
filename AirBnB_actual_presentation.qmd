@@ -306,10 +306,14 @@ summ_table <- tibble(
 kable(summ_table, caption = 'Linear Kernal SVM Best Model Summary')
 ```
 
+# Model Training Linear Kernel SVM
+
+**Linear Kernel SVM Gridsearch Summary**
+
 ```{r svm_linear_tune_summ, eval=TRUE, echo=FALSE}
 #| message: false
 #| warning: false
-#| fig-height: 5
+#| fig-height: 3.5
 #| fig-width: 5
 #| out-width: 80%
 #| fig-cap: Linear Kernal SVM CV Error vs Cost
@@ -434,7 +438,7 @@ nl_gr=svm_nl_grid_per %>% group_by(gamma,cost) %>%
 
 # Model Training Feed Forward Neural Network
 
-**Gridsearch Tuning Summary**
+**Grid Search Tuning Summary**
 
 ```{r,h20_init, echo=F,eval=TRUE}
 #| include: false
@@ -453,17 +457,17 @@ local_h2o <- h2o.init()
 #| fig-width: 8
 
 
-nn_model=h2o.loadGrid(grid_path="listings_nn_grid")
+nn_model=h2o.loadGrid(grid_path="SL_Assignment_3/listings_nn_grid_")
 
 grid_results=h2o.getGrid(
-  grid_id = "listings_nn_grid",
+  grid_id = "listings_nn_grid_",
   sort_by = "logloss", # USE as choosing metrics
   decreasing = FALSE # We want the smallest logloss at the top
 )
 
 
 parameter_comb=h2o.getGrid(
-  grid_id = "listings_nn_grid",
+  grid_id = "listings_nn_grid_",
   sort_by = "logloss",
   decreasing = FALSE
 )@summary_table
@@ -474,7 +478,7 @@ a=parameter_comb%>%
   group_by(hidden, l1) %>% 
   summarize(mean_ll=mean(logloss))  %>% 
   mutate(l1=factor(l1, levels= sort(unique(parameter_comb$l1))),
-                            hidden=factor(hidden, levels= c('5','10','15',"[15, 10, 5]") )
+                            hidden=factor(hidden, levels= c('2','5','10',"15") )
                             ) %>% 
  ggplot(aes(x=l1,y=mean_ll,group=1,color=hidden)) +
   geom_line()+
@@ -483,11 +487,10 @@ a=parameter_comb%>%
   labs(title='NN Gridsearch Summary',x='L1',y='Mean CV Log Loss',color='no. hidden layers')+
   theme_minimal()
   
- 
-#ggplotly(a)
+ #ggplotly(a)
 ```
 
-![Mean CV logloss per grid hyperparameter](nn_tune_summ.png){width="336" height="186"}
+![Neural Network grid search summary](new_grd_summ_nn.png){width="423"}
 
 # Model Training Feed Forward Neural Network
 
@@ -533,8 +536,258 @@ summ_table <- tibble(
 kable(summ_table, caption = 'Neural Net Best Model Metrics')
 ```
 
+```{r}
+#| include: false
+# #| label: nn_cf
+# #| fig-height: 5
+# #| fig-width: 6
+# 
+# library(reshape2)
+# # Get nn confusin matrix
+# nn_cf=as.data.frame(h2o.confusionMatrix(best_model, xval = TRUE))
+# 
+# h2o.performance(best_model,xval = TRUE )
+# 
+# 
+# h2o.(best_model, xval = TRUE)
+# 
+# nn_cf=nn_cf %>% select(no,yes)
+# nn_cf$actual=row.names(nn_cf)
+# 
+# nn_cf_long=melt(nn_cf) %>% 
+#   filter(actual!='Totals') %>% 
+#   filter(variable!='Totals') %>% 
+#   rename(predicted=variable) %>% 
+#   mutate(cell_type = ifelse(actual == predicted,
+#                             "Correct",
+#                             "Incorrect"))
+# nn_cf_pct <- nn_cf_long %>%
+#   group_by(actual) %>%
+#   mutate(percentage = value / sum(value),
+#          cell_type = ifelse(actual == predicted,
+#                             "Correct",
+#                             "Incorrect"))
+# 
+# ggplot(nn_cf_pct,
+#        aes(x = predicted,
+#            y = actual,
+#            fill = cell_type)) +
+#   geom_tile(color = "white") +
+#   geom_text(aes(label = percent(percentage, accuracy = 0.1)),
+#             size = 5) +
+#   scale_fill_manual(values = c(
+#     "Correct" = "blue",
+#     "Incorrect" = "red"
+#   )) +
+#   labs(
+#     x = "Predicted",
+#     y = "Actual",
+#     fill = "",
+#   #   title='Neural Net Best Model CV Confusion Matrix'
+#   # ) +
+#   theme_minimal(base_size = 14)
+
+
+```
+
+```{r,eval=T,echo=F}
+#| label: nn_cv_metrics
+#| message: false
+#| warning: false
+#| include: false
+h20_cv_perf=h2o.performance(best_model,xval = TRUE )
+h20_tr_perf=h2o.performance(best_model)
+
+#best_model@model$domains
+
+
+
+#h2o.predict(best_model,newdata=xval )
+
+# thresahold =0.820524 due to imbalanced dataset
+tau=0.8205246
+
+nn_f1= h2o.F1(h20_cv_perf)%>%
+  filter( round(threshold,3)==0.821) %>% 
+  pull(f1) # terrible f1 at this threshold
+
+
+
+nn_spec=h2o.specificity(h20_cv_perf) %>%
+  filter( round(threshold,3)==0.821) %>% 
+  pull(tnr)
+
+nn_sens=h2o.sensitivity(h20_cv_perf) %>%
+  filter( round(threshold,3)==0.821) %>% 
+  pull(tpr) # terrible
+
+#h2o.sensitivity()
+
+# nn_sens=h2o.sensitivity(h20_cv_perf) %>%
+#   filter( round(threshold,3)==0.821) %>% 
+#   pull(tpr)
+
+nn_bal_acc=(nn_sens+nn_spec)/2
+nn_bal_acc;nn_f1
+
+
+
+
+
+
+```
+
+```{r, eval=T,echo=F}
+#| label: linear_svm_metrics
+#| include: false
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+# Validation Matrix for Linear SVM
+
+# fold 1
+
+# Extract all the validation sets
+cv_folds= lapply(
+  liner_svm_model$train.ind,
+  function(fold_i) listings_data_cleaned[-fold_i, ]
+)
+
+names(cv_folds) <- 1:10
+
+cv_pred_list <- vector(mode = "list", length = 10)
+
+# Get cv predictions from best model
+for( k in 1:10){
+  df=cv_folds[[k]]
+  pred_labels=predict(liner_svm_model$best.model,newdata=df)
+  df$pred_labels= unname(pred_labels)
+  cv_pred_list[[k]]= df
+ 
+ 
+}
+
+
+# Get Aggregate 
+
+cv_specs=c()
+cv_sens=c()
+cv_bal_acc=c()
+cv_f1s=c()
+
+for( fold in 1:10){
+df=cv_pred_list[[fold]]
+
+cv_specificity=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['Specificity'])
+
+cv_sensitivity=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['Sensitivity'])
+
+cv_balanced_accuracy=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['Balanced Accuracy'])
+
+cv_f1=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['F1'])
+
+cv_specs=c(cv_specs,cv_specificity)
+cv_sens=c(cv_sens,cv_sensitivity)
+cv_bal_acc=c(cv_bal_acc,cv_balanced_accuracy)
+cv_f1s=c(cv_f1s,cv_f1)
+}
+
+# Get mean values across folds
+lin_svm_spec=mean(cv_specs);lin_svm_spec
+lin_svm_sens=mean(cv_sens);lin_svm_sens
+lin_svm_bal_acc=mean(cv_bal_acc);lin_svm_bal_acc
+lin_svm_f1=mean(cv_f1s);lin_svm_f1
+
+```
+
+```{r,echo=FALSE,eval=T}
+#| label: nl_svm_cv_metrics
+#| include: false
+nl_cv_folds= lapply(
+  nl_svm_model$train.ind,
+  function(fold_i) listings_data_cleaned[-fold_i, ]
+)
+
+names(nl_cv_folds) <- 1:10
+
+nl_cv_pred_list <- vector(mode = "list", length = 10)
+
+# Get cv predictions from best model
+for( k in 1:10){
+  df=nl_cv_folds[[k]]
+  pred_labels=predict(nl_svm_model$best.model,newdata=df)
+  df$pred_labels= unname(pred_labels)
+  nl_cv_pred_list[[k]]= df
+  #nl_cv_pred_list %>% select(fully_booked_30,pred_labels)
+  
+ 
+}
+
+
+# Get Aggregate 
+
+cv_specs=c()
+cv_sens=c()
+cv_bal_acc=c()
+cv_f1s=c()
+
+for( fold in 1:10){
+df=nl_cv_pred_list[[fold]]
+
+cv_specificity=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['Specificity'])
+
+cv_sensitivity=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['Sensitivity'])
+
+cv_balanced_accuracy=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['Balanced Accuracy'])
+
+cv_f1=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['F1'])
+
+cv_specs=c(cv_specs,cv_specificity)
+cv_sens=c(cv_sens,cv_sensitivity)
+cv_bal_acc=c(cv_bal_acc,cv_balanced_accuracy)
+cv_f1s=c(cv_f1s,cv_f1)
+}
+
+# Get mean values across folds
+nl_svm_spec=mean(cv_specs);nl_svm_spec
+nl_svm_sens=mean(cv_sens);nl_svm_sens
+nl_svm_bal_acc=mean(cv_bal_acc);nl_svm_bal_acc
+nl_svm_f1=mean(cv_f1s,na.rm=T);nl_svm_f1
+
+```
+
+# Cross Model Comparison
+
 ```{r,echo=FALSE,eval=TRUE}
+#| tbl-colwidths: [40, 40]
+
+# put it all together
+# Cross Model Summary Table
+cross_mod_metrics=data.frame(
+  Model=c('Linear Kernal SVM', 'Radial Kernel SVM','Feed Forward NN'),
+  Specificity=c(lin_svm_spec,nl_svm_spec,nn_spec),
+  Sensitivity=c(lin_svm_sens,nl_svm_sens,nn_sens),
+  F1=c(lin_svm_f1,nl_svm_f1,nn_f1),
+  `Bal Accuracy`=c(lin_svm_bal_acc,nl_svm_bal_acc,nn_bal_acc)
+  )
+
+cross_mod_metrics <- cross_mod_metrics%>% 
+  mutate(across(where(is.numeric), round, digits = 2))
+
+kable(cross_mod_metrics,
+  caption='Cross Model CV Metrics'
+)
+
+
+
+
 #h2o.shutdown() 
 ```
 
-# Next: cross model comparison and summary 
+# 
+
+```{r}
+
+
+```
