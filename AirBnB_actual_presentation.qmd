@@ -4,14 +4,20 @@ subtitle: "SVM and Neural Network Model Performance Analysis"
 author: "Pamela Afful"
 format:
   beamer:
+    include-in-header:
+      text: |
+        \usepackage{titlesec}
+        \titlespacing*{\section}{0pt}{0.2ex}{0.2ex}
+        \titlespacing*{\subsection}{0pt}{0.4ex}{0.1ex}
     fontsize: 8pt
     theme: Madrid       # Common, clean Beamer theme
     colortheme: default
     fonttheme: professionalfonts
     slide-number: true
     latex-min-runs: 2
-    toc: true
+    toc: false
 execute:
+  cache: true
   echo: true
   warning: false
   message: false
@@ -64,23 +70,21 @@ library(e1071)
 
 # Problem Statement
 
-A new competitor in the private residential market is interested in the Airbnb market in Cape Town and would like an analysis on the key predictors of demand of/ availability of Airbnbs. Demand in this case is proxied by the target variable, fully_booked_30, which is a binary variable that populates 1 if the Airbnb is fully booked in the next 30 days and 0 if not. This is done by using and comparing the classification metrics across 3 classification models namely:
+Claire Tours, a UK-based touring company, would like to partner with Airbnbs in Cape Town to sell touring packages. They are conducting research to predict which potential hosts would be ideal candidates to partner with based on their attributes. They thus require predictions of demand/vacancy at these properties. In this case, demand is proxied by the target variable, fully_booked_30, which is a binary variable that takes the value 1 if the Airbnb is fully booked in the next 30 days and 0 otherwise. This is done by training 3 classification models and comparing their performance metrics. The models are:
 
 -   SVM with a linear kernel
-
 -   SVM with a radial kernel
-
 -   Feed-forward Neural Network
 
-The insight will serve as a basis to gauge if there is viable demand for the competitor to enter the market.
-
+The predictions from the best-performing model, which can accurately classify Airbnbs that will not be fully booked in the next 30 days, will serve as input for the company’s potential monthly revenue models. \
+\
 10-fold cross-validation was used to train all the models, each with its own set of hyperparameters. The summary of the best-performing model for each is then selected and presented, along with a plot of the average CV metric across hyperparameter combinations.
 
 # Exploratory Analysis
 
-The data is highly imbalanced in favour of the negative class. Since the modelling aims to predict availability, this will be treated as the positive class in modelling- this is the target class.
-
-The data used was listings data containing key attributes across Airbnb IDs.
+The data is highly imbalanced in favour of the negative class) with \~82% of observations belonging to fully_booked_30=no . Since the modelling aims to predict availability, this will be treated as the positive class in modelling- this is the target class.\
+\
+There is no clear distinction between the classes spatially with both classes spread out evenly across latitudes and longitudes.
 
 ```{r data_read, eval=T, echo=F}
 #| message: false
@@ -193,10 +197,10 @@ listings_data_cleaned %>%
 
 When grouping by the target variable, fully_booked_30, the following key insights are observed:
 
--   Average Price and average minimum nights are slightly higher for observations in the "yes" class, with the gap much wider foraverage minimum nights (\~ 50 % higher than the "no" class).
+-   Average Price and average minimum nights are slightly higher for observations in the "yes" class, with the gap much wider for average minimum nights (\~ 50 % higher than the "no" class).
 -   Average review scores and average response rate are fairly evenly split across the two target classes
--   Average host listings are higher for the "no" class with an average of \~20 listings.
--   For the host age, the median (118 months) host age is \~5% higher for the "yes" class compared to the no class. Moreover no class has a longer range of host ages, although the distributions abot the median for both groups are similar; most host ages lie below the median host age.
+-   Average host listings are higher for the "no" class, with an average of \~20 listings.
+-   For the host age (measured by how long the host id has been an Airbnb in months) the median (118 months) host age is \~5% higher for the "yes" class compared to the no class. Moreover, the no class has a longer range of host ages, although the distributions about the median for both groups are similar; most host ages lie below their respective median host age.
 
 ```{r eda_plots, eval=TRUE, echo=F}
 #| message: false
@@ -275,9 +279,9 @@ print( (plot_list[["price"]]+plot_list[["minimum_nights"]]+plot_list[["review_sc
 
 # Linear Kernel SVM
 
-**Hyperparameter definitions**\
-**Cost Parameter:** This is a constant \>0 controlling how strict (alternatively, how wide or narrow) the margin is around the linear decision boundary. A higher cost value indicates a stricter model (and thus a narrower margin), whilst a low cost indicating a more tolerant model (wider margin).\
-For the linear kernel SVM, the cost parameter is tuned with the following options:\
+**Hyperparameter definitions\
+**\
+**Cost Parameter:** This is a constant \>0 controlling how strict the model (alternatively, how wide or narrow the margin is around the linear decision boundary). A higher cost value indicates a stricter model (and thus a narrower margin, with fewer boundary violations), whilst a lower cost indicates a more tolerant model (or wider margin). For the linear kernel SVM, the cost parameter is tuned with the following options:\
 1. Sequence starting from 0.15 to 3, in steps of 0.15, amounting to 20 cost parameter options.\
 
 ```{r svm_model_perf, echo=FALSE}
@@ -330,17 +334,47 @@ kable(summ_table, caption = 'Linear Kernal SVM Best Model Summary')
 #| fig-cap: Linear Kernal SVM CV Error vs Cost
 
 
-liner_svm_model$performances %>% 
-  ggplot(aes(x=cost,y=error))+
-  geom_line(color='steelblue')+
-  geom_point(color='steelblue')+
-  labs(title='Liner Kervel SVM CV Error vs Cost', y='CV Error')+
+q=liner_svm_model$performances %>% 
+  ggplot(aes(x = cost, y = error)) +
+  
+  geom_line(color = 'steelblue') +
+  geom_point(color = 'steelblue') +
+  
+  # horizontal arrow
+  annotate(
+    "segment",
+    x = 3, xend = 1,
+    y = 0.18345, yend = 0.18345,
+    colour = "blue",
+    arrow = arrow(length = unit(0.25, "cm"))
+  ) +
+  
+  # centered label
+  annotate(
+    "text",
+    x = 2.3,
+    y = 0.183456,
+    label = "Model starts to overfit at C >0.9",
+    colour = "blue",
+    size = 4,
+    hjust = 0.5
+  ) +
+  
+  labs(
+    title = 'Linear Kernel SVM CV Error vs Cost',
+    y = 'CV Miscl. Error'
+  ) +
+  
   theme_minimal()
+q
 ```
 
 # Non-Linear SVM Tuning Summary
 
-A radial-kernel SVM was chosen to train on the data. This kernel has an additional similarity parameter which controls the rate of similarity between points based on their distance; thus, this needs to be tuned during the cross-validation process.
+A radial-kernel SVM was chosen to train on the data. This kernel has an additional similarity parameter, gamma, that controls the rate of (dis)similarity between points based on their distance; thus, it is also tuned during training in addition to the cost parameter:
+
+1.  Cost: Sequence starting from 0.15 to 3, in steps of 0.15, amounting to 20 cost parameter options
+2.  Gamma: \[0.05 0.25 0.45 0.65 0.85 1.00\]
 
 ```{r,trainin_acc,eval=T,echo=F}
 #| message: false
@@ -408,7 +442,7 @@ kable(summ_table, caption='Radial Kernal SVM Best Model summary ')
 # Model Training Non-Linear Kernel SVM
 
 **Gridsearch Training Summary\
-**Across parameter combinations, the model starts to overfit as the gamma parameter increases past 0.50, as well as some higher values of gamma, past its optimal value.
+**Across parameter combinations, the model starts to overfit as the gamma parameter increases past 0.50
 
 ```{r nl_svm_summ, eval=T, echo=FALSE}
 #| message: false
@@ -433,38 +467,34 @@ nl_gr=svm_nl_grid_per %>% group_by(gamma,cost) %>%
   geom_line()+
   labs(title='Non Linear SVM Tuning Summary',x='gamma',y='CV Misclass Error')+
    geom_hline(yintercept = min_err, 
-               color = "lightblue", 
+               color = "purple", 
                linetype = "dashed", 
                linewidth = 1.1)+
-  annotate("text", x = 0.75, y = min_err, label = paste(a,',',b), color = "blue",size = 4)+
+  
+     geom_vline(xintercept = 0.45, 
+               color = "purple", 
+               linetype = "dashed", 
+               linewidth = 1.1)+
+  annotate("text", x = 0.455, y = 0.1850, label = paste(a,', ',b), color = "purple",size = 4)+
  
   theme_minimal()
+
   
 ```
 
-![Non-linear Kernel SVM CV Error Per Grid Hyperparameter](nl_grid_summ.png){width="352" height="164"}
-
-```{r}
-(nl_svm_model$fitted)
-
-nl_svm_model$best.perform
-
-
-```
+![Non-linear SVM CV Misc. Error per Grid Hyperparameter Combination](images/clipboard-253748003.png){width="313"}
 
 # Feed Forward Neural Network
 
-**Grid Search Tuning Summary**
+**Hyperparameters**
 
-Grid search was done on the following hyperparameters:
+For the feed-forward neural net, three hyperparameters were tuned in the training process:
 
-1.  Number of hidden layer nodes: (2, 5, 10,15)
+1.  **Number of hidden layer nodes**: \[2, 5, 10,15\]
+2.  **L1 regularization parameter,** which helps hedge the model against overfitting by minimizing (to 0 for some) the weights coming from non-relevant nodes (including the input layer). Values of this control the strength of the penalty, with smaller values indicating a more flexible and tolerant model: \[0.5,0.15,0.25\]
+3.  **Number of Training Epochs**- the number of times the (entire) training data feeds through the neural net: \[500, 1000, 1500,2000\], although early stopping is enabled to prevent the model from overfitting.
 
-2.  L1: (0.5,0.15,0.25)
-
-3.  Number of Training Epochs: (500, 1000, 1500,2000)
-
-The candidate model with the lowest CV log loss is chosen.\
+The candidate model with the lowest CV log loss is chosen.
 
 ```{r,h20_init, echo=F,eval=TRUE}
 #| include: false
@@ -516,8 +546,6 @@ a=parameter_comb%>%
  #ggplotly(a)
 ```
 
-![Neural Network grid search summary](new_grd_summ_nn.png){width="375" height="214"}
-
 # Model Training Feed Forward Neural Network
 
 **Best Model Summary**
@@ -561,6 +589,12 @@ summ_table <- tibble(
 
 kable(summ_table, caption = 'Neural Net Best Model Metrics')
 ```
+
+# Model Training Feed Forward Neural Network
+
+**Gridsearch Summary**
+
+![NN CV Log Loss Per Grid Hyperparameter Combination](new_grd_summ_nn.png){alt="NN CV Log Loss Per Grid Hyperparameter Combination" width="285" height="241"}
 
 ```{r}
 #| include: false
@@ -624,27 +658,30 @@ kable(summ_table, caption = 'Neural Net Best Model Metrics')
 h20_cv_perf=h2o.performance(best_model,xval = TRUE )
 h20_tr_perf=h2o.performance(best_model)
 
+
+h20_cv_perf
+
 #best_model@model$domains
 
 
 
 #h2o.predict(best_model,newdata=xval )
 
-# thresahold =0.820524 due to imbalanced dataset
+# thresahold ~0.5 fro comparison
 tau_2=0.50
 
-nn_f1= h2o.F1(h20_cv_perf)%>%
+nn_f1_2= h2o.F1(h20_cv_perf)%>%
   filter( round(threshold,2)==0.51) %>% 
   pull(f1) # terrible f1 at this threshold
 
 
 
-nn_spec=h2o.specificity(h20_cv_perf) %>%
-  filter( round(threshold,3)==0.821) %>% 
+nn_spec_2=h2o.specificity(h20_cv_perf) %>% 
+  filter( round(threshold,3)==0.510) %>% 
   pull(tnr)
 
-nn_sens=h2o.sensitivity(h20_cv_perf) %>%
-  filter( round(threshold,3)==0.821) %>% 
+nn_sens_2=h2o.sensitivity(h20_cv_perf) %>% 
+  filter( round(threshold,1)==0.510) %>% 
   pull(tpr) # terrible
 
 #h2o.sensitivity()
@@ -653,11 +690,12 @@ nn_sens=h2o.sensitivity(h20_cv_perf) %>%
 #   filter( round(threshold,3)==0.821) %>% 
 #   pull(tpr)
 
-nn_bal_acc=(nn_sens+nn_spec)/2
-nn_bal_acc;nn_f1
+nn_bal_acc_2=(nn_sens_2+nn_spec_2)/2
+
+h2o.cross_validation_holdout_predictions(best_model)
 
 
-
+# Higher threshhold due to imbalance target
 tau=0.8205246
 
 nn_f1= h2o.F1(h20_cv_perf)%>%
@@ -684,6 +722,15 @@ nn_bal_acc=(nn_sens+nn_spec)/2
 nn_bal_acc;nn_f1
 
 
+# Using 0.5 TS
+all_met_cv_05=as.data.frame(h20_cv_perf@metrics$thresholds_and_metric_scores)
+all_met_cv_05=all_met_cv_05 %>% 
+  filter( round(threshold,2)==0.51)
+
+# Using 0.81
+all_met_cv_081=as.data.frame(h20_cv_perf@metrics$thresholds_and_metric_scores)
+all_met_cv_081=all_met_cv_081 %>% 
+  filter( round(threshold,3)==0.821)
 
 
 
@@ -808,46 +855,103 @@ nl_svm_bal_acc=mean(cv_bal_acc);nl_svm_bal_acc
 nl_svm_f1=mean(cv_f1s,na.rm=T);nl_svm_f1
 
 
-best_model
+
 ```
 
 # Cross Model Comparison
 
-**Key Considerations**
+**Key Insights**
 
--   The models show mixed results with respect to different count prediction metrics.
--   Both SVMs show perfect sensitivity scores, that it was a ble to perfectly predict all positive labels as positive (target=no), however had very poor specificity. That is, the models were not able to correctly predict the majority of the negative class. The F1 scores for both are relatively high due to perfect positive class predictions, whilst the Balanced Accuracy suffers due to both models' inability to predict the minority class.
--   The NN is slightly more balanced in its metrics. A probability threshold of \~81% was used for the predicted class label assignment. The model was able to correctly classify \~73% of the minority (specificity) class label and only \~51% of the majority, positive label class.
+-   Both SVMs show perfect sensitivity scores, that is, they are able to perfectly predict all positive labels as positive (target=no); however, they had very poor specificity. The models were not able to correctly predict the majority of the negative class. The F1 scores for both are relatively high due to perfect positive class predictions, whilst the balanced accuracy suffers due to both models' inability to predict the minority class.
+-   The NN model is slightly more balanced in its metrics, at different probability class assignment thresholds:
+    -    At $\tau = 0.51$, the model was able to correctly classify \~100% the target class (fully_booked=no), with zero correct minority class predictions. The F1 score is also high, mostly bolstered by the high positive class prediction accuracy; the balanced accuracy score is at 50%- the model performs no better than a coin toss (again, mostly due to poor correct minority class predictions).
+    -   At $\tau = 0.81$, the model was able to correctly classify \~73% of the minority (specificity) class label and only \~51% of the majority, positive label class. The F1 score decreases to 0.65, although balanced accuracy improves to 65% due to the improvement in correct negative (minority class) predictions.
 
 ```{r,echo=FALSE,eval=TRUE}
 #| tbl-colwidths: [40, 40]
 
 # put it all together
 # Cross Model Summary Table
-cross_mod_metrics=data.frame(
-  Model=c('Linear Kernal SVM', 'Radial Kernel SVM','Feed Forward NN'),
-  Specificity=c(lin_svm_spec,nl_svm_spec,nn_spec),
-  Sensitivity=c(lin_svm_sens,nl_svm_sens,nn_sens),
-  F1=c(lin_svm_f1,nl_svm_f1,nn_f1),
-  `Bal Accuracy`=c(lin_svm_bal_acc,nl_svm_bal_acc,nn_bal_acc)
+# all_met_cv_05
+# all_met_cv_081
+
+# Extract metrics from threshold = 0.51 table
+nn_spec_051 <- all_met_cv_05$specificity
+nn_sens_051 <- all_met_cv_05$recall
+nn_f1_051   <- all_met_cv_05$f1
+nn_bal_051  <- all_met_cv_05$absolute_mcc
+
+# Balanced Accuracy calculation
+nn_bal_051 <- (nn_spec_051 + nn_sens_051)/2
+
+
+# Extract metrics from threshold = 0.821 table
+nn_spec_081 <- all_met_cv_081$specificity
+nn_sens_081 <- all_met_cv_081$recall
+nn_f1_081   <- all_met_cv_081$f1
+
+# Balanced Accuracy calculation
+nn_bal_081 <- (nn_spec_081 + nn_sens_081)/2
+
+
+nn_spec_051 <- all_met_cv_05$specificity
+nn_sens_051 <- all_met_cv_05$recall
+nn_f1_051   <- all_met_cv_05$f1
+
+# Balanced Accuracy calculation
+nn_bal_051 <- (nn_spec_051 + nn_sens_051)/2
+
+
+# Extract metrics from threshold = 0.821 table
+nn_spec_081 <- all_met_cv_081$specificity
+nn_sens_081 <- all_met_cv_081$recall
+nn_f1_081   <- all_met_cv_081$f1
+
+# Balanced Accuracy calculation
+nn_bal_081 <- (nn_spec_081 + nn_sens_081)/2
+
+# Final comparison table
+cross_mod_metrics <- data.frame(
+  
+  Model = c(
+    'Linear Kernel SVM',
+    'Radial Kernel SVM',
+    'Feed Forward Neural Net (\u03C4 = 0.51)',
+    'Feed Forward Neural Net (\u03C4 = 0.821)'
+  ),
+  
+  Specificity = c(
+    lin_svm_spec,
+    nl_svm_spec,
+    nn_spec_051,
+    nn_spec_081
+  ),
+  
+  Sensitivity = c(
+    lin_svm_sens,
+    nl_svm_sens,
+    nn_sens_051,
+    nn_sens_081
+  ),
+  
+  F1 = c(
+    lin_svm_f1,
+    nl_svm_f1,
+    nn_f1_051,
+    nn_f1_081
+  ),
+  
+  `Bal Accuracy` = c(
+    lin_svm_bal_acc,
+    nl_svm_bal_acc,
+    nn_bal_051,
+    nn_bal_081
   )
+)
 
 cross_mod_metrics <- cross_mod_metrics%>% 
-  mutate(across(where(is.numeric), round, digits = 2))
-
+  mutate(across(where(is.numeric), round, digits = 3))
 kable(cross_mod_metrics,
   caption='Cross Model CV Metrics'
 )
-
-
-
-
-#h2o.shutdown() 
-```
-
-# 
-
-```{r}
-
-
 ```
