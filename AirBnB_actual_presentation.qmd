@@ -444,6 +444,14 @@ nl_gr=svm_nl_grid_per %>% group_by(gamma,cost) %>%
 
 ![Non-linear Kernel SVM CV Error Per Grid Hyperparameter](nl_grid_summ.png){width="352" height="164"}
 
+```{r}
+(nl_svm_model$fitted)
+
+nl_svm_model$best.perform
+
+
+```
+
 # Feed Forward Neural Network
 
 **Grid Search Tuning Summary**
@@ -623,6 +631,33 @@ h20_tr_perf=h2o.performance(best_model)
 #h2o.predict(best_model,newdata=xval )
 
 # thresahold =0.820524 due to imbalanced dataset
+tau_2=0.50
+
+nn_f1= h2o.F1(h20_cv_perf)%>%
+  filter( round(threshold,2)==0.51) %>% 
+  pull(f1) # terrible f1 at this threshold
+
+
+
+nn_spec=h2o.specificity(h20_cv_perf) %>%
+  filter( round(threshold,3)==0.821) %>% 
+  pull(tnr)
+
+nn_sens=h2o.sensitivity(h20_cv_perf) %>%
+  filter( round(threshold,3)==0.821) %>% 
+  pull(tpr) # terrible
+
+#h2o.sensitivity()
+
+# nn_sens=h2o.sensitivity(h20_cv_perf) %>%
+#   filter( round(threshold,3)==0.821) %>% 
+#   pull(tpr)
+
+nn_bal_acc=(nn_sens+nn_spec)/2
+nn_bal_acc;nn_f1
+
+
+
 tau=0.8205246
 
 nn_f1= h2o.F1(h20_cv_perf)%>%
@@ -647,7 +682,6 @@ nn_sens=h2o.sensitivity(h20_cv_perf) %>%
 
 nn_bal_acc=(nn_sens+nn_spec)/2
 nn_bal_acc;nn_f1
-
 
 
 
@@ -697,13 +731,13 @@ cv_f1s=c()
 for( fold in 1:10){
 df=cv_pred_list[[fold]]
 
-cv_specificity=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['Specificity'])
+cv_specificity=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30,positive='no')$byClass['Specificity'])
 
-cv_sensitivity=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['Sensitivity'])
+cv_sensitivity=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30,positive='no')$byClass['Sensitivity'])
 
-cv_balanced_accuracy=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['Balanced Accuracy'])
+cv_balanced_accuracy=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30,positive='no')$byClass['Balanced Accuracy'])
 
-cv_f1=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['F1'])
+cv_f1=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30,positive='no')$byClass['F1'])
 
 cv_specs=c(cv_specs,cv_specificity)
 cv_sens=c(cv_sens,cv_sensitivity)
@@ -753,13 +787,13 @@ cv_f1s=c()
 for( fold in 1:10){
 df=nl_cv_pred_list[[fold]]
 
-cv_specificity=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['Specificity'])
+cv_specificity=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30,positive='no')$byClass['Specificity'])
 
-cv_sensitivity=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['Sensitivity'])
+cv_sensitivity=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30,positive='no')$byClass['Sensitivity'])
 
-cv_balanced_accuracy=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['Balanced Accuracy'])
+cv_balanced_accuracy=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30,positive='no')$byClass['Balanced Accuracy'])
 
-cv_f1=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30)$byClass['F1'])
+cv_f1=unname(confusionMatrix(data = df$pred_labels, reference = df$fully_booked_30,positive='no')$byClass['F1'])
 
 cv_specs=c(cv_specs,cv_specificity)
 cv_sens=c(cv_sens,cv_sensitivity)
@@ -773,13 +807,17 @@ nl_svm_sens=mean(cv_sens);nl_svm_sens
 nl_svm_bal_acc=mean(cv_bal_acc);nl_svm_bal_acc
 nl_svm_f1=mean(cv_f1s,na.rm=T);nl_svm_f1
 
+
+best_model
 ```
 
 # Cross Model Comparison
 
 **Key Considerations**
 
-Since the data is imbalanced and we are mostly interested in predicting the majority class ( fully booked=no), specificity with the main metric used to distiguish the best performing model\*\*\*look this up!!
+-   The models show mixed results with respect to different count prediction metrics.
+-   Both SVMs show perfect sensitivity scores, that it was a ble to perfectly predict all positive labels as positive (target=no), however had very poor specificity. That is, the models were not able to correctly predict the majority of the negative class. The F1 scores for both are relatively high due to perfect positive class predictions, whilst the Balanced Accuracy suffers due to both models' inability to predict the minority class.
+-   The NN is slightly more balanced in its metrics. A probability threshold of \~81% was used for the predicted class label assignment. The model was able to correctly classify \~73% of the minority (specificity) class label and only \~51% of the majority, positive label class.
 
 ```{r,echo=FALSE,eval=TRUE}
 #| tbl-colwidths: [40, 40]
