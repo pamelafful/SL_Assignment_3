@@ -4,6 +4,7 @@ subtitle: "SVM and Neural Network Model Performance Analysis"
 author: "Pamela Afful"
 format:
   beamer:
+    fontsize: 8pt
     theme: Madrid       # Common, clean Beamer theme
     colortheme: default
     fonttheme: professionalfonts
@@ -63,13 +64,17 @@ library(e1071)
 
 # Problem Statement
 
-A new competitor in the private residential market is interested in the Airbnb market in Cape Town and would like an analysis on the key predictors of demand of/ availability of Airbnbs. Demand in this case is proxied by the target variable, fully_booked_30, which is a binary variable that populates 1 if the Airbnb is fully booked in the next 30 days and 0 if not. This is done by using and comparing classification models:
+A new competitor in the private residential market is interested in the Airbnb market in Cape Town and would like an analysis on the key predictors of demand of/ availability of Airbnbs. Demand in this case is proxied by the target variable, fully_booked_30, which is a binary variable that populates 1 if the Airbnb is fully booked in the next 30 days and 0 if not. This is done by using and comparing the classification metrics across 3 classification models namely:
 
 -   SVM with a linear kernel
 
 -   SVM with a radial kernel
 
 -   Feed-forward Neural Network
+
+The insight will serve as a basis to gauge if there is viable demand for the competitor to enter the market.
+
+10-fold cross-validation was used to train all the models, each with its own set of hyperparameters. The summary of the best-performing model for each is then selected and presented, along with a plot of the average CV metric across hyperparameter combinations.
 
 # Exploratory Analysis
 
@@ -135,7 +140,9 @@ a= listings_data_cleaned %>% ggplot(aes(x=price,fill=fully_booked_30)) +
 #| message: false
 #| warning: false
 #| fig-height: 5
-#| fig-subcap: Spatial Plot of BNB Listings,Fully Booked 30 Label Distribution
+#| fig-subcap: 
+#|   - "Spatial Distribution of Listings Grouped by Targey"
+#|   - "Distribution of Target, Fully_booked_30"
 #| fig-width: 8
 #| layout-ncol: 2
 
@@ -182,9 +189,14 @@ listings_data_cleaned %>%
   theme_minimal() #1
 ```
 
-# Feature Distributions
+# Exploratory Analysis Feature Distributions
 
-some text here
+When grouping by the target variable, fully_booked_30, the following key insights are observed:
+
+-   Average Price and average minimum nights are slightly higher for observations in the "yes" class, with the gap much wider foraverage minimum nights (\~ 50 % higher than the "no" class).
+-   Average review scores and average response rate are fairly evenly split across the two target classes
+-   Average host listings are higher for the "no" class with an average of \~20 listings.
+-   For the host age, the median (118 months) host age is \~5% higher for the "yes" class compared to the no class. Moreover no class has a longer range of host ages, although the distributions abot the median for both groups are similar; most host ages lie below the median host age.
 
 ```{r eda_plots, eval=TRUE, echo=F}
 #| message: false
@@ -261,11 +273,12 @@ print( (plot_list[["price"]]+plot_list[["minimum_nights"]]+plot_list[["review_sc
        
 ```
 
-# Model Training
+# Linear Kernel SVM
 
-## Linear Kernel SVM
-
-some text here
+**Hyperparameter definitions**\
+**Cost Parameter:** This is a constant \>0 controlling how strict (alternatively, how wide or narrow) the margin is around the linear decision boundary. A higher cost value indicates a stricter model (and thus a narrower margin), whilst a low cost indicating a more tolerant model (wider margin).\
+For the linear kernel SVM, the cost parameter is tuned with the following options:\
+1. Sequence starting from 0.15 to 3, in steps of 0.15, amounting to 20 cost parameter options.\
 
 ```{r svm_model_perf, echo=FALSE}
 #| warning: false
@@ -288,14 +301,12 @@ training_correct_classification_rate=sum(listings_data_cleaned_features$predicti
 
 summ_table <- tibble(
   Metric = c(
-    "model_name",
     "best_cost",
     "nr.support_vectors",
     "best_cross_validation_error",
     "best_training_accuracy"
   ),
   Value = c(
-    "Linear Kernal SVM",
     liner_svm_model$best.parameters,
     length(liner_svm_model$best.model$index),
     round(liner_svm_model$best.performance, 2),
@@ -327,11 +338,9 @@ liner_svm_model$performances %>%
   theme_minimal()
 ```
 
-# Model Training
+# Non-Linear SVM Tuning Summary
 
-## Non-Linear SVM Tuning Summary
-
-Cross-validation was used to train a radial-kernel SVM on the data. This kernel has an additional similarity parameter which controls the rate of similarity between points based on their distance; thus, this needs to be tuned during the cross-validation process.
+A radial-kernel SVM was chosen to train on the data. This kernel has an additional similarity parameter which controls the rate of similarity between points based on their distance; thus, this needs to be tuned during the cross-validation process.
 
 ```{r,trainin_acc,eval=T,echo=F}
 #| message: false
@@ -361,7 +370,6 @@ training_correct_classification_rate=sum(listings_data_cleaned_features$predicti
 ```{r nl_svm, eval=T, echo=FALSE}
 #| message: false
 #| warning: false
-#| fig-cap: Non Linear Kernal SVM CV Error vs Cost
 #| fig-height: 5
 #| fig-width: 5
 #| out-width: 80%
@@ -378,7 +386,7 @@ summ_table <- tibble(
     "best_training_accuracy"
   ),
   Value = c(
-    length(nl_svm_model$best.model$index),
+    round(length(nl_svm_model$best.model$index)),
     nl_svm_model$best.parameters$cost,
     nl_svm_model$best.parameters$gamma,
     round(nl_svm_model$best.performance, 2),
@@ -386,7 +394,7 @@ summ_table <- tibble(
   )
 )
 
-kable(summ_table)
+kable(summ_table, caption='Radial Kernal SVM Best Model summary ')
 
 
 
@@ -397,7 +405,7 @@ kable(summ_table)
 
 ```
 
-# Model Training Linear Kernel SVM
+# Model Training Non-Linear Kernel SVM
 
 **Gridsearch Training Summary\
 **Across parameter combinations, the model starts to overfit as the gamma parameter increases past 0.50, as well as some higher values of gamma, past its optimal value.
@@ -434,11 +442,21 @@ nl_gr=svm_nl_grid_per %>% group_by(gamma,cost) %>%
   
 ```
 
-![Non-linear Kernel SVM CV Error Per Grid Hyperparameter](nl_grid_summ.png){width="387" height="213"}
+![Non-linear Kernel SVM CV Error Per Grid Hyperparameter](nl_grid_summ.png){width="352" height="164"}
 
-# Model Training Feed Forward Neural Network
+# Feed Forward Neural Network
 
 **Grid Search Tuning Summary**
+
+Grid search was done on the following hyperparameters:
+
+1.  Number of hidden layer nodes: (2, 5, 10,15)
+
+2.  L1: (0.5,0.15,0.25)
+
+3.  Number of Training Epochs: (500, 1000, 1500,2000)
+
+The candidate model with the lowest CV log loss is chosen.\
 
 ```{r,h20_init, echo=F,eval=TRUE}
 #| include: false
@@ -490,7 +508,7 @@ a=parameter_comb%>%
  #ggplotly(a)
 ```
 
-![Neural Network grid search summary](new_grd_summ_nn.png){width="423"}
+![Neural Network grid search summary](new_grd_summ_nn.png){width="375" height="214"}
 
 # Model Training Feed Forward Neural Network
 
@@ -758,6 +776,10 @@ nl_svm_f1=mean(cv_f1s,na.rm=T);nl_svm_f1
 ```
 
 # Cross Model Comparison
+
+**Key Considerations**
+
+Since the data is imbalanced and we are mostly interested in predicting the majority class ( fully booked=no), specificity with the main metric used to distiguish the best performing model\*\*\*look this up!!
 
 ```{r,echo=FALSE,eval=TRUE}
 #| tbl-colwidths: [40, 40]
